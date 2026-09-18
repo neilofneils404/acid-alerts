@@ -204,11 +204,11 @@ function alertsUrl(location) {
 function parseCollection(raw) {
   var empty = { alerts: [], error: "" }
   var text = String(raw || "")
-  if (text === "") return empty
+  if (text.trim() === "") return { alerts: [], error: "empty NWS response" }
   try {
     var data = JSON.parse(text)
     if (!data || typeof data !== "object") return { alerts: [], error: "unreadable NWS payload" }
-    if (data.type && data.type !== "FeatureCollection" && !data.features) {
+    if (data.type !== "FeatureCollection" || !Array.isArray(data.features)) {
       return { alerts: [], error: String(data.detail || data.title || "unexpected NWS payload") }
     }
     var features = data.features
@@ -216,7 +216,8 @@ function parseCollection(raw) {
     var alerts = []
     for (var i = 0; i < features.length; i++) {
       var alert = normalizeAlert(features[i])
-      if (alert) alerts.push(alert)
+      if (!alert) return { alerts: [], error: "unreadable NWS alert" }
+      alerts.push(alert)
     }
     alerts.sort(compareAlerts)
     return { alerts: alerts, error: "" }

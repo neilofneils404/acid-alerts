@@ -20,6 +20,13 @@ Panel {
   property int selectedIndex: 0
   property string fetchError: ""
   property bool fetchInFlight: false
+  property bool hasSuccessfulFetch: false
+  property int fetchGeneration: 0
+  property int requestGeneration: -1
+  property string responseBody: ""
+  property bool responseReady: false
+  property bool requestExited: false
+  property int requestExitCode: -1
   property bool seenHydrated: false
   property bool firstLoad: true
   property string lastUpdated: ""
@@ -46,7 +53,9 @@ Panel {
   readonly property string label: Model.barLabel(alerts, !!(bar && bar.vertical))
   readonly property string barIcon: selected ? selected.icon : (alertCount > 0 ? alerts[0].icon : "")
   readonly property bool warningActive: selected ? Model.isWarningRank(selected.rank) : false
-  readonly property string barTooltip: selected ? selected.headline : "Acid Alerts"
+  readonly property string barTooltip: root.fetchError !== ""
+    ? "Acid Alerts · " + root.heroMeta()
+    : (selected ? selected.headline : "Acid Alerts · " + root.statusHeading())
   readonly property var mapLayers: Model.mapLayers(alerts, selected ? selected.id : "")
   readonly property int refreshMs: Math.max(30000, (parseInt(setting("refreshSeconds", 60), 10) || 60) * 1000)
   readonly property bool demoMode: Demo.demoEnabled(root.settings)
@@ -107,7 +116,12 @@ Panel {
       root.fetchError = ""
       return
     }
-    if (fetchProc.running) return
+    if (fetchProc.running || root.fetchInFlight) return
+    root.requestGeneration = root.fetchGeneration
+    root.responseBody = ""
+    root.responseReady = false
+    root.requestExited = false
+    root.requestExitCode = -1
     fetchProc.command = [
       "curl", "-fsS", "--max-time", "10",
       "-A", Model.userAgent(),
@@ -116,6 +130,35 @@ Panel {
     ]
     root.fetchInFlight = true
     fetchProc.running = true
+  }
+
+  // Invalidate results when switching locations or entering/leaving demo mode.
+  function resetSource() {
+    root.fetchGeneration += 1
+    root.hasSuccessfulFetch = false
+    root.lastUpdated = ""
+    root.fetchError = ""
+    root.incomingAlerts = []
+    root.alerts = []
+    root.firstLoad = true
+    root.refresh()
+  }
+
+  // stdout and exit callbacks may arrive in either order. Never accept a body
+  // from a failed request, or one started for a different location/mode.
+  function finishFetch() {
+    if (!root.fetchInFlight || !root.requestExited) return
+    if (root.requestExitCode === 0 && !root.responseReady) return
+    root.fetchInFlight = false
+    if (root.requestGeneration !== root.fetchGeneration) {
+      Qt.callLater(root.refresh)
+      return
+    }
+    if (root.requestExitCode !== 0) {
+      root.fetchError = "NWS is unreachable"
+      return
+    }
+    root.applyPayload(root.responseBody)
   }
 
   function applyDemo() {
@@ -129,7 +172,6 @@ Panel {
       features: scene.features
     }))
     root.fetchError = ""
-    root.fetchInFlight = false
     root.incomingAlerts = parsed.alerts
     root.applyVisible()
     root.lastUpdated = "demo"
@@ -156,7 +198,8 @@ Panel {
     Model.attachZoneRings(parsed.alerts, root.zoneCache)
     root.incomingAlerts = parsed.alerts
     root.applyVisible()
-    root.lastUpdated = Qt.formatTime(new Date(), "h:mm AP")
+    root.hasSuccessfulFetch = true
+    root.lastUpdated = Qt.formatDateTime(new Date(), "MMM d h:mm AP")
     notifyNewAlerts(root.alerts)
     root.firstLoad = false
     persistSeen(parsed.alerts)
@@ -297,13 +340,28 @@ Panel {
     return Qt.formatDateTime(date, sameDay ? "h:mm AP" : "MMM d h:mm AP")
   }
 
+  function statusHeading() {
+    if (!root.demoMode && !root.located) return "SET A LOCATION"
+    if (root.selected) return root.selected.event.toUpperCase()
+    if (root.demoMode) return "DEMO"
+    if (root.fetchError !== "") return "ALERTS UNAVAILABLE"
+    if (!root.hasSuccessfulFetch) return "CHECKING ALERTS"
+    if (root.fetchInFlight) return "UPDATING ALERTS"
+    return "NO MATCHING ALERTS"
+  }
+
   function heroMeta() {
     if (root.demoMode && root.demoScene)
       return "DEMO · " + root.demoScene.title
     if (!root.located) return "Set a weather location to watch this place."
-    if (root.fetchError !== "") return root.fetchError
-    if (root.filteredOut) return incomingAlerts.length + " in " + locationLabel() + ", hidden by filters"
-    if (root.alertCount === 0) return "Listening for warnings in " + locationLabel()
+    if (root.fetchError !== "")
+      return root.fetchError + (root.hasSuccessfulFetch
+        ? " · showing last known data; current conditions unknown"
+        : " · current conditions unknown")
+    if (!root.hasSuccessfulFetch) return "Waiting for NWS data for " + locationLabel()
+    if (root.fetchInFlight) return "Checking NWS for " + locationLabel()
+    if (root.filteredOut) return root.incomingAlerts.length + " in " + locationLabel() + ", hidden by filters"
+    if (root.alertCount === 0) return "No alerts match your filters in " + locationLabel()
     var until = root.selected ? formatWhen(root.selected.expires) : ""
     if (until !== "") return root.selected.severity.toUpperCase() + " · until " + until
     return root.selected ? root.selected.severity.toUpperCase() : ""
@@ -316,7 +374,7 @@ Panel {
       return "DEMO " + here + "/" + n + " · [ previous  ] next · not a live NWS product"
     }
     if (root.located)
-      return "NWS · " + locationLabel() + (root.lastUpdated !== "" ? " · " + root.lastUpdated : "")
+      return "NWS · " + locationLabel() + (root.lastUpdated !== "" ? " · last checked " + root.lastUpdated : "")
     return "NWS · set a location with omarchy-weather-location"
   }
 
@@ -332,8 +390,8 @@ Panel {
     return root.dim
   }
 
-  onLocationKeyChanged: root.refresh()
-  onDemoModeChanged: root.refresh()
+  onLocationKeyChanged: root.resetSource()
+  onDemoModeChanged: root.resetSource()
   onSettingsChanged: root.applyVisible()
   onAlertCountChanged: if (root.alertCount > 0) root.filtersOpen = false
   onZoneAtlasChanged: if (root.demoMode) root.applyDemo()
@@ -405,12 +463,16 @@ Panel {
     id: fetchProc
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.applyPayload(text)
+      onStreamFinished: {
+        root.responseBody = text
+        root.responseReady = true
+        root.finishFetch()
+      }
     }
     onExited: function(exitCode) {
-      root.fetchInFlight = false
-      if (exitCode !== 0 && root.alerts.length === 0)
-        root.fetchError = "NWS is unreachable"
+      root.requestExitCode = exitCode
+      root.requestExited = true
+      root.finishFetch()
     }
   }
 
@@ -484,7 +546,7 @@ Panel {
 
               Text {
                 width: parent.width - (root.barIcon !== "" ? Style.space(36) : 0)
-                text: root.alertCount === 0 ? "ALL CLEAR" : (root.selected ? root.selected.event.toUpperCase() : "ALERT")
+                text: root.statusHeading()
                 color: root.warningActive ? root.contentUrgent : root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.heading

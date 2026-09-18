@@ -80,7 +80,7 @@ BarWidget {
     visible: !root.hasAlerts
     bar: root.bar
     slotSize: Style.bar.statusSlot
-    tooltipText: "Acid Alerts"
+    tooltipText: root.tooltip
     iconComponent: brandComp
 
     onPressed: function(buttonCode) {

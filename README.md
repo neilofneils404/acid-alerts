@@ -1,88 +1,77 @@
 # Acid Alerts
 
-National Weather Service alerts in the Omarchy bar. A small diamond mark sits next to the clock; when a warning is in force it becomes the event pill.
+National Weather Service alerts for [Omarchy](https://omarchy.org). A diamond sits in the bar. When something is in force, it becomes the event.
 
-This is not a forecast, not radar, and not a replacement for Wireless Emergency Alerts or NOAA Weather Radio.
+<p align="center">
+  <img src="docs/media/bar-idle.png" alt="Acid Alerts idle mark on the Omarchy bar" />
+</p>
 
-## Install
+Not a forecast. Not radar. Not a replacement for Wireless Emergency Alerts or NOAA Weather Radio.
 
 ```sh
 omarchy plugin add https://github.com/neilofneils404/acid-alerts.git --enable
 ```
 
-The plugin reads the same location file Omarchy weather already uses:
+Uses the same location as Omarchy weather (`omarchy-weather-location`). United States and territories, because that is [api.weather.gov](https://www.weather.gov/documentation/services-web-api).
 
-```
-~/.local/state/omarchy/settings/weather.json
-```
+## All clear
 
-Set it without turning the weather pill on:
+The mark stays on the bar so you always have a place to click. Filters live here: warnings on by default, watches and advisories opt-in, family chips if you only want tornado (or winter, or fire).
 
-```sh
-omarchy-weather-location --set "Grafton" 41.27255,-82.05459
-```
+<p align="center">
+  <img src="docs/media/all-clear.png" alt="All-clear panel with warning filters" width="320" />
+</p>
 
-Coverage is the United States and its territories, because that is what [api.weather.gov](https://www.weather.gov/documentation/services-web-api) issues. Outside that area the bar stays quiet.
+## When it hits
 
-## Usage
+The card is just the product: type, pixel footprint, instruction. Filters fold under `FILTERS ▸` so a laptop screen still sees the warning. Short displays shrink the map. Omarchy also caps the card to the screen and lets it scroll.
 
-The bar always shows the Acid Alerts mark. When a matching product is in force, the mark becomes the event pill. Click for the issued text, the instruction, and — when NWS included a shape — a pixel footprint with a you-are-here mark.
+<p align="center">
+  <img src="docs/media/tornado.png" alt="Tornado Warning with storm-based polygon" width="320" />
+</p>
 
-**Default: all warnings.** Watches and advisories stay off until you enable them in the panel. Click a family chip (Tornado, Winter / ice, …) to limit further; click it again to return to every product in the enabled classes. A tornado-only install is: Warnings on, everything else off, Tornado highlighted.
+Storm-based warnings (tornado, severe thunderstorm, flash flood, snow squall) draw the **polygon the forecast office issued**. Winter, ice, and watches draw **official NWS county / zone outlines**.
 
-- Left click opens or closes the panel
-- Middle click refreshes
-- Escape closes
-- `r` refreshes while the panel is focused
-- Up / Down moves between stacked alerts
+<p align="center">
+  <img src="docs/media/ice-storm.png" alt="Ice Storm Warning on the Lorain zone outline" width="280" />
+  <img src="docs/media/winter-watch.png" alt="Winter Storm Watch across Lorain, Cuyahoga, and Medina" width="280" />
+</p>
 
-Desktop notifications fire for new warnings, and for later-arriving immediate moderate alerts. Advisories already in force when the shell starts do not toast.
+Ice and winter watch shots above are the demo gallery (`"demo": true` in the widget entry) so you can see product types without waiting on weather. The footer says DEMO. Live mode only shows what NWS has in force at your point.
 
-## Configure
+## Keys
 
-```sh
-omarchy bar move neil.acid-alerts --section center
-```
-
-Optional per-widget settings in `~/.config/omarchy/shell.json`:
-
-| Key | Meaning |
+| | |
 | --- | --- |
-| `refreshSeconds` | Poll interval. Default `60`, minimum `30`. |
-| `showWarnings` | Show Warning products. Default `true`. |
-| `showWatches` | Show Watch products. Default `false`. |
-| `showAdvisories` | Show advisories, statements, and similar. Default `false`. |
-| `families` | Optional allow-list: `tornado`, `thunderstorm`, `flashflood`, `flood`, `winter`, `wind`, `cold`, `heat`, `fire`, `tropical`, `fog`, `other`. Empty means every family. |
-| `latitude` / `longitude` | Override the weather location for this widget only. |
-| `name` | Label used with a coordinate override. |
+| Left click | Open / close |
+| Middle click | Refresh |
+| Escape | Close |
+| `f` | Filters (while an alert is up) |
+| `r` | Refresh |
+| Up / Down | Stacked alerts |
+| `[` `]` | Demo scenes, demo mode only |
 
-The plugin never writes the Omarchy weather location file.
+## Settings
 
-To walk a gallery of product types without waiting on weather (tornado, flash flood, winter storm, ice, blizzard, and the rest), set `"demo": true` on the widget entry. `[` and `]` move between scenes. Demo watches and winter products use the real Lorain / Cuyahoga / Medina outlines from NWS; storm-based demos use typical warning-polygon shapes, not a live issuance. The footer says DEMO. Remove `demo` before publishing or daily use.
+Widget entry in `~/.config/omarchy/shell.json`, or the panel toggles (they write the same keys).
 
-## Remove
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `showWarnings` | `true` | Warning products |
+| `showWatches` | `false` | Watch products |
+| `showAdvisories` | `false` | Advisories, statements, similar |
+| `families` | `[]` | Limit to `tornado`, `thunderstorm`, `flashflood`, `flood`, `winter`, `wind`, `cold`, `heat`, `fire`, `tropical`, `fog`, `other` |
+| `refreshSeconds` | `60` | Poll interval, minimum `30` |
+| `latitude` / `longitude` / `name` | weather.json | Optional override; never writes the weather file |
+
+Tornado-only: Warnings on, everything else off, **Tornado** chip highlighted.
 
 ```sh
 omarchy plugin remove neil.acid-alerts
 ```
 
-## Data
-
-Active alerts come from `https://api.weather.gov/alerts/active?point={lat},{lon}`. Point queries resolve both zone-based watches and county or polygon warnings for that coordinate.
-
-The pixel map draws official NWS geometry only:
-
-- **Storm-based warnings** (tornado, severe thunderstorm, flash flood, snow squall) use the polygon the Weather Forecast Office issued with the product.
-- **Zone and county products** (winter storms, ice, watches, many advisories) often ship with no polygon. The plugin then loads the county or forecast-zone outline from `api.weather.gov/zones/...` via `affectedZones` / UGC codes.
-
-It does not invent county lines, and it is not a basemap or radar. If NWS did not publish a shape, the map stays empty and the caption says so.
-
-Requests send a identifying `User-Agent` as NWS requires. No API key.
-
 ## Safety
 
-Acid Alerts is a desktop glance at official NWS products. It can miss an issue, a poll, or a network blip. For life-threatening weather, use NOAA Weather Radio, Wireless Emergency Alerts, and local instructions.
-
-## License
+Acid Alerts is a desktop glance at official NWS products. It can miss a poll or a network blip. For life-threatening weather, use NOAA Weather Radio, Wireless Emergency Alerts, and local instructions.
 
 MIT. Alert text and polygons are U.S. Government public-domain NWS data.

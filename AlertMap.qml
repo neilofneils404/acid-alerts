@@ -15,12 +15,13 @@ Item {
   property color mark: Color.accent
   property color warning: Color.urgent
   property int cell: 3
+  property int mapHeight: Style.space(128)
 
   readonly property bool hasFootprint: root.layers && root.layers.length > 0
   readonly property var allRings: collectRings()
   readonly property var bounds: Model.boundsFor(allRings, userLat, userLon, 0.2)
 
-  implicitHeight: hasFootprint ? Style.space(148) : 0
+  implicitHeight: hasFootprint ? mapHeight : 0
   visible: hasFootprint && bounds !== null
   clip: true
 

@@ -28,6 +28,7 @@ Panel {
   property var zoneCache: ({})
   property var zoneQueue: []
   property string zoneFetchUrl: ""
+  property bool filtersOpen: false
 
   readonly property var barIdentity: hostWidget || root
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
@@ -52,6 +53,13 @@ Panel {
   readonly property var filter: Model.parseFilter(root.settings)
   readonly property bool filteredOut: !demoMode && incomingAlerts.length > 0 && alertCount === 0
   readonly property var familyChoices: Model.familyOptions()
+  readonly property bool filtersVisible: alertCount === 0 || filtersOpen
+  readonly property int mapPixels: {
+    var avail = panel.availableCardHeight
+    if (avail > 0 && avail < 400) return Style.space(88)
+    if (avail > 0 && avail < 560) return Style.space(108)
+    return Style.space(128)
+  }
   readonly property var demoScenes: Demo.scenes(root.zoneAtlas)
   readonly property var demoScene: demoScenes.length === 0
     ? null
@@ -232,6 +240,20 @@ Panel {
     return list.indexOf(id) !== -1
   }
 
+  function toggleFilters() {
+    root.filtersOpen = !root.filtersOpen
+  }
+
+  function filterSummary() {
+    var parts = []
+    if (root.filter.warnings) parts.push("Warnings")
+    if (root.filter.watches) parts.push("Watches")
+    if (root.filter.advisories) parts.push("Advisories")
+    if (root.filter.families.length > 0) parts.push(String(root.filter.families.length) + " families")
+    if (parts.length === 0) return "nothing selected"
+    return parts.join(" · ")
+  }
+
   function notifyNewAlerts(nextAlerts) {
     if (!root.seenHydrated || root.demoMode) return
     for (var i = 0; i < nextAlerts.length; i++) {
@@ -313,6 +335,7 @@ Panel {
   onLocationKeyChanged: root.refresh()
   onDemoModeChanged: root.refresh()
   onSettingsChanged: root.applyVisible()
+  onAlertCountChanged: if (root.alertCount > 0) root.filtersOpen = false
   onZoneAtlasChanged: if (root.demoMode) root.applyDemo()
 
   FileView {
@@ -415,6 +438,7 @@ Panel {
       onActivateRequested: root.refresh()
       onTextKey: function(t) {
         if (t === "r" || t === "R") root.refresh()
+        else if (t === "f" || t === "F") root.toggleFilters()
         else if (t === "[") root.moveDemo(-1)
         else if (t === "]") root.moveDemo(1)
       }
@@ -485,6 +509,7 @@ Panel {
           AlertMap {
             id: footprint
             width: parent.width
+            mapHeight: root.mapPixels
             layers: root.mapLayers
             userLat: Number(root.location.latitude)
             userLon: Number(root.location.longitude)
@@ -585,23 +610,40 @@ Panel {
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.bodySmall
             wrapMode: Text.WordWrap
+            maximumLineCount: 5
+            elide: Text.ElideRight
             textFormat: Text.PlainText
           }
 
-          Text {
+          Item {
             width: parent.width
-            visible: root.selected && root.selected.headline !== ""
-            text: root.selected ? root.selected.headline : ""
-            color: root.dim
-            font.family: root.contentFontFamily
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.WordWrap
-            textFormat: Text.PlainText
+            height: filterToggle.implicitHeight
+            visible: root.alertCount > 0
+
+            Text {
+              id: filterToggle
+              width: parent.width
+              text: root.filtersOpen
+                ? "FILTERS ▾"
+                : "FILTERS ▸  " + root.filterSummary()
+              color: root.dim
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              textFormat: Text.PlainText
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.toggleFilters()
+            }
           }
 
           Column {
             width: parent.width
             spacing: Style.space(6)
+            visible: root.filtersVisible
 
             Text {
               width: parent.width

@@ -1,8 +1,8 @@
 // Local gallery of NWS product types for screenshot and layout testing.
-// Shapes sit around Grafton so the footprint map is readable; copy is
+// Shapes sit around Cleveland so the footprint map is readable; copy is
 // official-style instruction language, not a live product.
 
-var HOME = { lat: 41.27255, lon: -82.05459 }
+var CLEVELAND = { lat: 41.4993, lon: -81.6944 }
 
 function demoEnabled(settings) {
   if (!settings || typeof settings !== "object") return false
@@ -16,29 +16,28 @@ function demoEnabled(settings) {
 }
 
 function scenes(atlas) {
-  var lorainCounty = geomFromAtlas(atlas, ["OHC093"], "zone")
-  var lorainZone = geomFromAtlas(atlas, ["OHZ010"], "zone") || lorainCounty
-  var watchCounties = geomFromAtlas(atlas, ["OHC093", "OHC035", "OHC103"], "zone")
+  var cuyahogaCounty = geomFromAtlas(atlas, ["OHC035"], "zone")
+  var watchCounties = cuyahogaCounty
   return [
     scene("tornado-warning", "Tornado Warning", [
       alert("Tornado Warning", "Extreme", "Immediate", "Observed",
         "TAKE COVER NOW. Move to a basement or an interior room on the lowest floor of a sturdy building. Avoid windows. If you are outdoors, in a mobile home, or in a vehicle, move to the closest substantial shelter and protect yourself from flying debris.",
-        "Lorain, OH", 0.5, wedge(), "polygon")
+        "Cleveland, OH", 0.5, wedge(), "polygon")
     ]),
     scene("tornado-watch", "Tornado Watch", [
       alert("Tornado Watch", "Moderate", "Expected", "Possible",
         "Be ready. A tornado watch means conditions are favorable. Have a way to receive warnings and know where you will take shelter. This watch covers a broad area; a warning means take cover now.",
-        "Lorain; Cuyahoga; Medina", 4, watchCounties, "zone")
+        "Cuyahoga County, OH", 4, watchCounties, "zone")
     ]),
     scene("severe-thunderstorm-warning", "Severe Thunderstorm Warning", [
       alert("Severe Thunderstorm Warning", "Severe", "Immediate", "Observed",
         "For your protection move to an interior room on the lowest floor of a building. Avoid windows. Flying debris will be dangerous to those caught without shelter. Heavy rain may flood low-lying roads.",
-        "Grafton, OH", 0.6, stormTrack(), "polygon")
+        "Cleveland, OH", 0.6, stormTrack(), "polygon")
     ]),
     scene("severe-thunderstorm-watch", "Severe Thunderstorm Watch", [
       alert("Severe Thunderstorm Watch", "Moderate", "Expected", "Possible",
         "A severe thunderstorm watch means conditions are favorable for severe storms with damaging wind and large hail. Be prepared to move to shelter if a warning is issued.",
-        "Lorain; Cuyahoga; Medina", 5, watchCounties, "zone")
+        "Cuyahoga County, OH", 5, watchCounties, "zone")
     ]),
     scene("flash-flood-warning", "Flash Flood Warning", [
       alert("Flash Flood Warning", "Severe", "Immediate", "Likely",
@@ -48,78 +47,78 @@ function scenes(atlas) {
     scene("flash-flood-watch", "Flash Flood Watch", [
       alert("Flash Flood Watch", "Severe", "Future", "Possible",
         "A flash flood watch is in effect. Be prepared to move to higher ground. Avoid low water crossings and stay informed as storms train over the same area.",
-        "Lorain County, OH", 8, lorainCounty, "zone")
+        "Cuyahoga County, OH", 8, cuyahogaCounty, "zone")
     ]),
     scene("flood-warning", "Flood Warning", [
       alert("Flood Warning", "Severe", "Expected", "Likely",
         "River flooding is occurring or imminent. Stay away from flood waters. Never drive through flooded roadways. The river is expected to remain above flood stage into the evening.",
-        "Black River at Elyria", 18, lorainCounty, "zone")
+        "Black River at Elyria", 18, cuyahogaCounty, "zone")
     ]),
     scene("flood-advisory", "Flood Advisory", [
       alert("Flood Advisory", "Minor", "Expected", "Likely",
         "Turn around, don't drown when encountering flooded roads. Most flood deaths occur in vehicles. Be aware of your surroundings and do not drive on flooded roads.",
-        "Grafton, OH", 2, ponding(), "polygon")
+        "Cleveland, OH", 2, ponding(), "polygon")
     ]),
     scene("winter-storm-warning", "Winter Storm Warning", [
       alert("Winter Storm Warning", "Severe", "Expected", "Likely",
         "Hazardous travel is expected from accumulating snow and blowing snow. If you must travel, keep an extra flashlight, food, and water in your vehicle. The latest road conditions can be obtained from local authorities.",
-        "Lorain, OH", 18, lorainZone, "zone")
+        "Cleveland, OH", 18, cuyahogaCounty, "zone")
     ]),
     scene("winter-storm-watch", "Winter Storm Watch", [
       alert("Winter Storm Watch", "Moderate", "Future", "Possible",
         "A winter storm watch means significant snow, sleet, or ice is possible. Plan to avoid travel and have extra supplies on hand if the watch is upgraded to a warning.",
-        "Lorain; Cuyahoga; Medina", 30, watchCounties, "zone")
+        "Cuyahoga County, OH", 30, watchCounties, "zone")
     ]),
     scene("ice-storm-warning", "Ice Storm Warning", [
       alert("Ice Storm Warning", "Severe", "Expected", "Likely",
         "Power outages and tree damage are likely from ice accumulation. Stay off the roads. If you lose power, use generators outdoors only. Falling limbs will be a hazard.",
-        "Lorain, OH", 12, lorainZone, "zone")
+        "Cleveland, OH", 12, cuyahogaCounty, "zone")
     ]),
     scene("blizzard-warning", "Blizzard Warning", [
       alert("Blizzard Warning", "Severe", "Expected", "Likely",
         "Whiteout conditions and life-threatening travel are expected. Do not travel. If you are caught outside, seek sturdy shelter immediately. Blowing snow will reduce visibility to near zero.",
-        "Lorain, OH", 12, lorainZone, "zone")
+        "Cleveland, OH", 12, cuyahogaCounty, "zone")
     ]),
     scene("snow-squall-warning", "Snow Squall Warning", [
       alert("Snow Squall Warning", "Severe", "Immediate", "Observed",
         "A snow squall is moving through. Sudden whiteout and slick roads will make travel extremely dangerous. If driving, pull off the highway until the squall passes. Do not slam on the brakes.",
-        "Grafton, OH", 0.7, squall(), "polygon")
+        "Cleveland, OH", 0.7, squall(), "polygon")
     ]),
     scene("wind-chill-warning", "Wind Chill Warning", [
       alert("Wind Chill Warning", "Severe", "Expected", "Likely",
         "Dangerously cold wind chills will cause frostbite in minutes on exposed skin. Limit time outdoors. Dress in layers and cover all exposed skin.",
-        "Lorain, OH", 14, lorainZone, "zone")
+        "Cleveland, OH", 14, cuyahogaCounty, "zone")
     ]),
     scene("freeze-warning", "Freeze Warning", [
       alert("Freeze Warning", "Moderate", "Expected", "Likely",
         "Sub-freezing temperatures will kill unprotected plants and may freeze pipes. Cover tender vegetation and allow faucets to drip if they are vulnerable.",
-        "Lorain, OH", 10, lorainCounty, "zone")
+        "Cleveland, OH", 10, cuyahogaCounty, "zone")
     ]),
     scene("winter-weather-advisory", "Winter Weather Advisory", [
       alert("Winter Weather Advisory", "Minor", "Expected", "Likely",
         "Snow and ice will make roads slick. Slow down and allow extra time. Isolated power outages are possible where ice accretes on trees.",
-        "Lorain, OH", 8, lorainZone, "zone")
+        "Cleveland, OH", 8, cuyahogaCounty, "zone")
     ]),
     scene("heat-advisory", "Heat Advisory", [
       alert("Heat Advisory", "Moderate", "Expected", "Likely",
         "Drink plenty of fluids, stay in an air-conditioned room, stay out of the sun, and check on relatives and neighbors. Watch for heat exhaustion and heat stroke.",
-        "Lorain, OH", 10, lorainZone, "zone")
+        "Cleveland, OH", 10, cuyahogaCounty, "zone")
     ]),
     scene("special-weather-statement", "Special Weather Statement", [
       alert("Special Weather Statement", "Moderate", "Expected", "Observed",
         "Strong thunderstorms will pass through the area. Brief wind gusts, small hail, and heavy downpours are possible. This is not a warning.",
-        "Lorain County, OH", 1, cell(), "polygon")
+        "Cuyahoga County, OH", 1, cell(), "polygon")
     ]),
     scene("stack", "Warning + watch + advisory", [
       alert("Tornado Warning", "Extreme", "Immediate", "Observed",
         "TAKE COVER NOW. Move to a basement or an interior room on the lowest floor of a sturdy building. Avoid windows.",
-        "Grafton, OH", 0.4, wedge(), "polygon"),
+        "Cleveland, OH", 0.4, wedge(), "polygon"),
       alert("Winter Storm Watch", "Moderate", "Future", "Possible",
         "Significant snow is possible behind the severe weather. Have extra supplies on hand.",
-        "Lorain; Cuyahoga; Medina", 24, watchCounties, "zone"),
+        "Cuyahoga County, OH", 24, watchCounties, "zone"),
       alert("Flood Advisory", "Minor", "Expected", "Likely",
         "Turn around, don't drown when encountering flooded roads.",
-        "Lorain County, OH", 3, ponding(), "polygon")
+        "Cuyahoga County, OH", 3, ponding(), "polygon")
     ])
   ]
 }
@@ -172,7 +171,7 @@ function geomFromAtlas(atlas, ids, kind) {
 function poly(offsets) {
   var ring = []
   for (var i = 0; i < offsets.length; i++) {
-    ring.push([HOME.lon + offsets[i][0], HOME.lat + offsets[i][1]])
+    ring.push([CLEVELAND.lon + offsets[i][0], CLEVELAND.lat + offsets[i][1]])
   }
   var first = ring[0]
   var last = ring[ring.length - 1]

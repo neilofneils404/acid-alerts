@@ -4,9 +4,9 @@ The repo identity uses the same pixel-diamond A as `BrandMark.qml`: warm white, 
 
 | Asset | Use |
 | --- | --- |
-| `../docs/media/hero.png` | README header, 1280 × 640 |
-| `../docs/media/social-preview.png` | Ready to upload as the repository's social preview, 1280 × 640 |
-| `../docs/media/alert-gallery.png` | Three-panel product gallery, 1280 × 720 |
+| `../docs/media/hero.png` | README header, 1920 × 960 |
+| `../docs/media/social-preview.png` | Ready to upload as the repository's social preview, 1920 × 960 |
+| `../docs/media/alert-gallery.png` | Three-panel product gallery, 1920 × 1080 |
 | `../preview.png` | Plugin preview, 512 × 512 |
 | `mark.png` | Transparent pixel mark, 352 × 352 |
 | `source/*.svg` | Editable vector sources with embedded screenshots where needed |
@@ -25,11 +25,21 @@ The script reads the pixel pattern directly from `BrandMark.qml`, writes the SVG
 
 ## Screenshot provenance
 
-The tornado, ice storm, and winter watch images are actual plugin screenshots recovered from full desktop captures made September 18, 2026. Only the panel bounds were extracted; no UI, alert text, colors, or map shapes were reconstructed or retouched. The complete panel border and demo footer are retained. Text truncated by the running plugin remains truncated in the images.
+Screenshots were captured directly from the running plugin on September 18, 2026, on a 1920 × 1080 display at display scale 1. The shell's supported text-size setting was temporarily increased from 10 to 18 for legibility, producing native 540-pixel-wide panels. Normal text size and live alert mode were restored after capture.
 
-All three show the built-in `Demo.js` gallery. Its instruction text and storm polygon are illustrative, not a live NWS product. County / zone outlines use the bundled demo zone atlas. Marketing compositions add headings and a dark background outside those screenshots; their lime accent is branding, not a claim about the screenshot's active theme.
+| Screenshot | Native size | Mode |
+| --- | --- | --- |
+| `tornado.png` | 540 × 665 | Demo scene 1 |
+| `winter-watch.png` | 540 × 642 | Demo scene 10 |
+| `ice-storm.png` | 540 × 642 | Demo scene 11 |
+| `no-matching-alerts.png` | 540 × 678 | Live, successful NWS check |
+| `bar-idle.png` | 330 × 39 | Live, closed panel |
 
-The older `all-clear.png` and `bar-idle.png` remain available but are not featured in the README. The all-clear capture also reports an NWS connection failure, so it is unsuitable as a healthy-state product example.
+Only plugin panel or bar regions were captured; unrelated desktop windows are excluded. No UI, alert text, colors, or map shapes were reconstructed or retouched. Complete panel borders and demo footers are retained. Text truncated by the running plugin remains truncated in the images.
+
+The three alert panels show the built-in `Demo.js` gallery centered on Cleveland, Ohio, with Cuyahoga County outlines. Its instruction text and storm polygon are illustrative, not a live NWS product. County / zone outlines use the bundled demo zone atlas. A temporary plugin-only location override selected Cleveland (41.4993, -81.6944); the system weather location was never changed. The no-matching-alerts screenshot records one successful Cleveland check, not a current weather report or a guarantee of safe conditions.
+
+Marketing compositions add headings and a dark background outside the screenshots. Their lime accent is branding, not a claim about the active theme. Header and gallery exports use higher-resolution canvases and preserve the screenshots' native aspect ratios. The obsolete `all-clear.png` has been removed.
 
 ## Palette
 

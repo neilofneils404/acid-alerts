@@ -3,6 +3,7 @@
 import base64
 import re
 import subprocess
+import struct
 from html import escape
 from pathlib import Path
 
@@ -28,13 +29,17 @@ def mark(x, y, cell):
                    for j, row in enumerate(ROWS) for i, v in enumerate(row) if v != '.')
 
 
-def screenshot(name, x, y, w, h):
-    data = base64.b64encode((MEDIA / name).read_bytes()).decode()
+def screenshot(name, x, y, w, h=None):
+    raw = (MEDIA / name).read_bytes()
+    native_w, native_h = struct.unpack('>II', raw[16:24])
+    if h is None:
+        h = w * native_h / native_w
+    data = base64.b64encode(raw).decode()
     return f'<image x="{x}" y="{y}" width="{w}" height="{h}" href="data:image/png;base64,{data}"/>'
 
 
-def export(name, width, height, body, target, title):
-    svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img"><title>{escape(title)}</title>{body}</svg>'
+def export(name, width, height, body, target, title, scale=1):
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="{int(width * scale)}" height="{int(height * scale)}" viewBox="0 0 {width} {height}" role="img"><title>{escape(title)}</title>{body}</svg>'
     source = SOURCE / (name + '.svg')
     source.write_text(svg + '\n')
     subprocess.run(['rsvg-convert', str(source), '-o', str(target)], check=True)
@@ -62,9 +67,9 @@ def hero():
     s += rect(814, 99, 8, 8, '#ff8b43')
     s += text(834, 111, 'TORNADO WARNING', 16, INK, 500, True)
     s += rect(814, 131, 396, 1, '#354137')
-    s += screenshot('tornado.png', 862, 153, 300, 354)
+    s += screenshot('tornado.png', 862, 143, 300)
     s += text(814, 548, 'ACTUAL UI / DEMO DATA', 13, MUTED, 400, True)
-    export('hero', 1280, 640, s, MEDIA / 'hero.png', 'Acid Alerts — weather alerts within reach. Actual Omarchy plugin UI with demo data.')
+    export('hero', 1280, 640, s, MEDIA / 'hero.png', 'Acid Alerts — weather alerts within reach. Actual Omarchy plugin UI with demo data.', scale=1.5)
     # A separate filename makes the intended GitHub social upload explicit.
     (MEDIA / 'social-preview.png').write_bytes((MEDIA / 'hero.png').read_bytes())
 
@@ -74,20 +79,20 @@ def gallery():
     s += text(48, 60, 'One place to see what’s in force.', 34, INK, 700)
     s += text(48, 98, 'Alert type, affected area, and instructions — a click from your bar.', 20, MUTED)
     cards = [
-        ('01', 'Tornado warning', 'Storm-based polygon', 'tornado.png', 354),
-        ('02', 'Ice storm warning', 'County / zone outline', 'ice-storm.png', 342),
-        ('03', 'Winter storm watch', 'County / zone outline', 'winter-watch.png', 342),
+        ('01', 'Tornado warning', 'Storm-based polygon', 'tornado.png'),
+        ('02', 'Ice storm warning', 'County / zone outline', 'ice-storm.png'),
+        ('03', 'Winter storm watch', 'County / zone outline', 'winter-watch.png'),
     ]
-    for i, (n, title, caption, filename, height) in enumerate(cards):
+    for i, (n, title, caption, filename) in enumerate(cards):
         x = 48 + 400*i
         s += rect(x, 139, 384, 500, PANEL, 'rx="10" stroke="#354137"')
         s += text(x+24, 174, n, 14, LIME, 500, True)
         s += text(x+24, 208, title, 23, INK, 700)
-        s += screenshot(filename, x+42, 234, 300, height)
+        s += screenshot(filename, x+42, 234, 300)
         s += text(x+24, 617, caption, 15, MUTED, 400, True)
     s += text(48, 682, 'DEMO GALLERY', 14, LIME, 500, True)
     s += text(240, 682, 'Illustrative scenarios, not live alerts. Appearance follows your Omarchy theme.', 16, MUTED)
-    export('alert-gallery', 1280, 720, s, MEDIA / 'alert-gallery.png', 'Three actual Acid Alerts panels showing demo tornado, ice storm, and winter watch scenarios.')
+    export('alert-gallery', 1280, 720, s, MEDIA / 'alert-gallery.png', 'Three actual Acid Alerts panels showing demo tornado, ice storm, and winter watch scenarios.', scale=1.5)
 
 
 def icon():

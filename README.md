@@ -37,10 +37,10 @@ Acid Alerts uses the location set by `omarchy-weather-location`. Open the diamon
 ## See it in action
 
 <p align="center">
-  <img src="docs/media/alert-gallery.png" alt="Actual Acid Alerts demo panels: a tornado warning with a storm polygon, an ice storm warning with a county or zone outline, and a winter storm watch spanning multiple areas." width="1280" />
+  <img src="docs/media/alert-gallery.png" alt="Actual Acid Alerts demo panels: a tornado warning with a storm polygon, an ice storm warning with a county or zone outline, and a winter storm watch for Cuyahoga County." width="1280" />
 </p>
 
-**Actual plugin UI, demo data.** These are illustrative scenarios from the built-in gallery, not live NWS alerts. The alert text and storm polygon in demo mode are examples; county / zone outlines come from the bundled zone data. Colors follow the active Omarchy theme.
+**Actual plugin UI, demo data.** These are illustrative Cleveland / Cuyahoga County scenarios from the built-in gallery, not live NWS alerts. The alert text and storm polygon in demo mode are examples; county / zone outlines come from the bundled zone data. Colors follow the active Omarchy theme.
 
 View full-size panels: [Tornado warning](docs/media/tornado.png) · [Ice storm warning](docs/media/ice-storm.png) · [Winter storm watch](docs/media/winter-watch.png)
 
@@ -56,6 +56,16 @@ Set `"demo": true` on the Acid Alerts widget entry in `~/.config/omarchy/shell.j
 </details>
 
 ## Make it yours
+
+<p align="center">
+  <img src="docs/media/bar-idle.png" alt="Acid Alerts pixel-diamond icon in the Omarchy bar" width="330" />
+</p>
+
+<p align="center">
+  <img src="docs/media/no-matching-alerts.png" alt="Live Acid Alerts panel after a successful NWS check: no matching alerts, warning filters, weather-family choices, and last-checked time" width="420" />
+</p>
+
+A successful live check with no alerts matching the selected filters. This is a captured example, not a current weather report.
 
 Change alert filters in the panel, or edit the Acid Alerts widget entry in `~/.config/omarchy/shell.json`. Panel toggles save to the same settings.
 

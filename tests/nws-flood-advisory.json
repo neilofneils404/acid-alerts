@@ -1,0 +1,67 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.627b8236f37bc6693cea044ce16e8c9b18ef37f3.001.1",
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -97.44,
+              27.87
+            ],
+            [
+              -97.44,
+              27.97
+            ],
+            [
+              -97.26,
+              27.97
+            ],
+            [
+              -97.27,
+              27.89
+            ],
+            [
+              -97.26,
+              27.88
+            ],
+            [
+              -97.27,
+              27.87
+            ],
+            [
+              -97.36,
+              27.85
+            ],
+            [
+              -97.44,
+              27.87
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "id": "urn:oid:2.49.0.1.840.0.627b8236f37bc6693cea044ce16e8c9b18ef37f3.001.1",
+        "event": "Flood Advisory",
+        "severity": "Minor",
+        "urgency": "Expected",
+        "certainty": "Likely",
+        "headline": "Flood Advisory issued September 18 at 1:13PM CDT until September 18 at 3:15PM CDT by NWS Corpus Christi TX",
+        "description": "* WHAT...Flooding caused by excessive rainfall is expected.\n\n* WHERE...Southeastern San Patricio County in south central Texas...\n\n* WHEN...Until 315 PM CDT.\n\n* IMPACTS...Minor flooding in low-lying and poor drainage areas.\n\n* ADDITIONAL DETAILS...\n- At 113 PM CDT, Doppler radar indicated heavy rain due to\nthunderstorms. Minor flooding is ongoing or expected to begin\nshortly in the advisory area. Between 1 and 2 inches of rain have\nfallen.\n- Additional rainfall amounts of 1 to 2 inches are expected over\nthe area. This additional rain will result in minor flooding.\n- Some locations that will experience flooding include...\nPortland, Gregory and Taft Southwest.\n- http://www.weather.gov/safety/flood",
+        "instruction": "Turn around, don't drown when encountering flooded roads. Most flood\ndeaths occur in vehicles.\n\nBe aware of your surroundings and do not drive on flooded roads.",
+        "areaDesc": "San Patricio, TX",
+        "sent": "2026-09-18T13:13:00-05:00",
+        "onset": "2026-09-18T13:13:00-05:00",
+        "expires": "2026-09-18T15:15:00-05:00",
+        "ends": "2026-09-18T15:15:00-05:00",
+        "effective": "2026-09-18T13:13:00-05:00",
+        "response": "Avoid",
+        "messageType": "Alert",
+        "status": "Actual"
+      }
+    }
+  ]
+}

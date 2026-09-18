@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "neil.acid-alerts",
+  "name": "Acid Alerts",
+  "version": "1.0.0",
+  "author": "Neil",
+  "license": "MIT",
+  "description": "National Weather Service alerts for your Omarchy weather location. Warnings on by default; watches and advisories are opt-in.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Acid Alerts",
+    "description": "Warnings for your weather location, with an idle brand mark when the area is clear.",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "center"
+  }
+}

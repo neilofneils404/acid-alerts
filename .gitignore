@@ -1,0 +1,4 @@
+.qmllint.ini
+*.qmlc
+*.jsc
+.DS_Store

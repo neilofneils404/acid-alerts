@@ -1,77 +1,114 @@
-# Acid Alerts
-
-National Weather Service alerts for [Omarchy](https://omarchy.org). A diamond sits in the bar. When something is in force, it becomes the event.
-
 <p align="center">
-  <img src="docs/media/bar-idle.png" alt="Acid Alerts idle mark on the Omarchy bar" />
+  <img src="docs/media/hero.png" alt="Acid Alerts — Weather alerts. Within reach. National Weather Service alerts in your Omarchy desktop bar. Actual UI shown with demo data." width="1280" />
 </p>
 
-Not a forecast. Not radar. Not a replacement for Wireless Emergency Alerts or NOAA Weather Radio.
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#see-it-in-action">See it in action</a> ·
+  <a href="#make-it-yours">Settings</a> ·
+  <a href="#weather-safety">Weather safety</a>
+</p>
+
+# Acid Alerts
+
+**A little more weather awareness, right where you work.**
+
+Acid Alerts brings [National Weather Service](https://www.weather.gov/) alerts to [Omarchy](https://omarchy.org). A small pixel diamond lives in your bar; when a matching alert is active, the bar shows the event. Click to see its affected area and instructions.
+
+- **Local by default.** Uses your Omarchy weather location, with an optional location override.
+- **Warnings first.** Warnings are enabled out of the box. Add watches, advisories, or specific weather families to suit your needs.
+- **See the affected area.** Displays NWS storm polygons or county / zone outlines, depending on the alert.
+- **At home on your desktop.** Follows your Omarchy theme, with keyboard controls and desktop notifications for newly detected qualifying alerts.
+
+For locations covered by NWS in the **United States and its territories**. This is an alert viewer, not a forecast or radar app.
+
+> **Keep more than one way to receive warnings.** Acid Alerts depends on your desktop, internet connection, and periodic NWS checks. Use it alongside Wireless Emergency Alerts, NOAA Weather Radio, and local emergency guidance.
+
+## Install
+
+Requires an Omarchy installation with shell plugin support and a configured weather location.
 
 ```sh
 omarchy plugin add https://github.com/neilofneils404/acid-alerts.git --enable
 ```
 
-Uses the same location as Omarchy weather (`omarchy-weather-location`). United States and territories, because that is [api.weather.gov](https://www.weather.gov/documentation/services-web-api).
+Acid Alerts uses the location set by `omarchy-weather-location`. Open the diamond in your bar to review your filters. The default refresh interval is **60 seconds**.
 
-## All clear
-
-The mark stays on the bar so you always have a place to click. Filters live here: warnings on by default, watches and advisories opt-in, family chips if you only want tornado (or winter, or fire).
+## See it in action
 
 <p align="center">
-  <img src="docs/media/all-clear.png" alt="All-clear panel with warning filters" width="320" />
+  <img src="docs/media/alert-gallery.png" alt="Actual Acid Alerts demo panels: a tornado warning with a storm polygon, an ice storm warning with a county or zone outline, and a winter storm watch spanning multiple areas." width="1280" />
 </p>
 
-## When it hits
+**Actual plugin UI, demo data.** These are illustrative scenarios from the built-in gallery, not live NWS alerts. The alert text and storm polygon in demo mode are examples; county / zone outlines come from the bundled zone data. Colors follow the active Omarchy theme.
 
-The card is just the product: type, pixel footprint, instruction. Filters fold under `FILTERS ▸` so a laptop screen still sees the warning. Short displays shrink the map. Omarchy also caps the card to the screen and lets it scroll.
+View full-size panels: [Tornado warning](docs/media/tornado.png) · [Ice storm warning](docs/media/ice-storm.png) · [Winter storm watch](docs/media/winter-watch.png)
 
-<p align="center">
-  <img src="docs/media/tornado.png" alt="Tornado Warning with storm-based polygon" width="320" />
-</p>
+In live mode, the plugin requests active NWS alerts for your location and applies your filters. Storm-based products can show the polygon issued by the forecast office; county- and zone-based products use NWS boundary outlines. Filters collapse while an alert is open to leave more room for the alert itself.
 
-Storm-based warnings (tornado, severe thunderstorm, flash flood, snow squall) draw the **polygon the forecast office issued**. Winter, ice, and watches draw **official NWS county / zone outlines**.
+<details>
+<summary>Explore the demo gallery</summary>
 
-<p align="center">
-  <img src="docs/media/ice-storm.png" alt="Ice Storm Warning on the Lorain zone outline" width="280" />
-  <img src="docs/media/winter-watch.png" alt="Winter Storm Watch across Lorain, Cuyahoga, and Medina" width="280" />
-</p>
+Set `"demo": true` on the Acid Alerts widget entry in `~/.config/omarchy/shell.json`. Open the panel and use `[` / `]` to cycle through scenarios. The footer labels demo mode, and demo alerts do not send notifications.
 
-Ice and winter watch shots above are the demo gallery (`"demo": true` in the widget entry) so you can see product types without waiting on weather. The footer says DEMO. Live mode only shows what NWS has in force at your point.
+**Set `"demo": false` or remove the key to return to live alerts.** Demo mode displays sample scenarios instead of monitoring live alerts.
 
-## Keys
+</details>
 
-| | |
-| --- | --- |
-| Left click | Open / close |
-| Middle click | Refresh |
-| Escape | Close |
-| `f` | Filters (while an alert is up) |
-| `r` | Refresh |
-| Up / Down | Stacked alerts |
-| `[` `]` | Demo scenes, demo mode only |
+## Make it yours
 
-## Settings
+Change alert filters in the panel, or edit the Acid Alerts widget entry in `~/.config/omarchy/shell.json`. Panel toggles save to the same settings.
 
-Widget entry in `~/.config/omarchy/shell.json`, or the panel toggles (they write the same keys).
-
-| Key | Default | Meaning |
+| Setting | Default | What it does |
 | --- | --- | --- |
-| `showWarnings` | `true` | Warning products |
-| `showWatches` | `false` | Watch products |
-| `showAdvisories` | `false` | Advisories, statements, similar |
-| `families` | `[]` | Limit to `tornado`, `thunderstorm`, `flashflood`, `flood`, `winter`, `wind`, `cold`, `heat`, `fire`, `tropical`, `fog`, `other` |
-| `refreshSeconds` | `60` | Poll interval, minimum `30` |
-| `latitude` / `longitude` / `name` | weather.json | Optional override; never writes the weather file |
+| `showWarnings` | `true` | Show warning products. |
+| `showWatches` | `false` | Include watches. |
+| `showAdvisories` | `false` | Include advisories, statements, and similar products. |
+| `families` | `[]` | Include all weather families, or limit to the selected families below. |
+| `refreshSeconds` | `60` | Seconds between checks; minimum `30`. |
+| `latitude` / `longitude` / `name` | Omarchy weather location | Override the plugin location without changing your weather settings. |
+| `demo` | `false` | Show sample alerts instead of live data. |
 
-Tornado-only: Warnings on, everything else off, **Tornado** chip highlighted.
+Available families: `tornado`, `thunderstorm`, `flashflood`, `flood`, `winter`, `wind`, `cold`, `heat`, `fire`, `tropical`, `fog`, `other`.
+
+For tornado warnings only, keep **Warnings** on, leave **Watches** and **Advisories** off, and select the **Tornado** family. Filtering narrows what you see and which newly detected alerts can notify you.
+
+### Controls
+
+| Action | Control |
+| --- | --- |
+| Open or close the panel | Left click |
+| Refresh | Middle click, or `r` with the panel open |
+| Close | `Escape` |
+| Show or hide filters during an alert | `f` |
+| Select among active alerts | `↑` / `↓` |
+| Previous or next demo scene | `[` / `]` in demo mode |
+
+### Uninstall
 
 ```sh
 omarchy plugin remove neil.acid-alerts
 ```
 
-## Safety
+## Weather safety
 
-Acid Alerts is a desktop glance at official NWS products. It can miss a poll or a network blip. For life-threatening weather, use NOAA Weather Radio, Wireless Emergency Alerts, and local instructions.
+Acid Alerts is an independent desktop plugin that displays official NWS data in live mode. It is not an official NWS product, and it cannot guarantee delivery of every alert. Network outages, a sleeping computer, filters, and polling delays can prevent or delay an alert. Previously unseen severe or extreme alerts can notify on the first load; lower-severity alerts have additional notification restrictions.
 
-MIT. Alert text and polygons are U.S. Government public-domain NWS data.
+The panel shows **ALERTS UNAVAILABLE** when a check fails without any cached alerts. Previously loaded alerts remain visible with a last-known-data notice and the last successful check time. **NO MATCHING ALERTS** means a successful check found nothing matching your filters.
+
+**An empty panel is not a guarantee of safe weather.** Keep Wireless Emergency Alerts enabled, have access to NOAA Weather Radio, and follow instructions from your local weather office and emergency officials.
+
+## Contributing
+
+Bug reports, clearer documentation, and improvements to alert handling are welcome. [Open an issue](https://github.com/neilofneils404/acid-alerts/issues) with your Omarchy version, what happened, and what you expected. Remove precise location details from logs or screenshots before sharing them.
+
+The alert model has a Node.js test suite:
+
+```sh
+node tests/test-model.js
+node tests/test-panel-state.js
+```
+
+Brand assets, editable SVG sources, and rendering instructions are documented in [branding/README.md](branding/README.md).
+
+[MIT licensed](LICENSE). Live alert text and geographic data are supplied by the [NWS API](https://www.weather.gov/documentation/services-web-api).

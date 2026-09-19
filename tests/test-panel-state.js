@@ -146,3 +146,48 @@ assert.equal(filtered.incomingAlerts.length, 1)
 assert.equal(filtered.alertCount, 0)
 assert.equal(filtered.statusHeading(), 'NO MATCHING ALERTS')
 console.log('panel state regression tests: ok')
+
+// Failed/oversized/truncated transfers must never reach either parser, even
+// when the partial stdout happens to contain a complete JSON document.
+for (const zone of [false, true]) {
+  for (const exitCode of [0, 18, 28, 63]) {
+    for (const first of ['stdout', 'exit']) {
+      const q = panel()
+      let applied = 0
+      let pumped = 0
+      const fields = zone
+        ? ['zoneFetchInFlight', 'zoneResponseReady', 'zoneRequestExited', 'zoneRequestExitCode', 'zoneResponseBody']
+        : ['fetchInFlight', 'responseReady', 'requestExited', 'requestExitCode', 'responseBody']
+      q[fields[0]] = true
+      q[fields[1]] = false
+      q[fields[2]] = false
+      q[fields[3]] = -1
+      q[fields[4]] = ''
+      q[zone ? 'applyZonePayload' : 'applyPayload'] = () => { applied++ }
+      q.pumpZones = () => { pumped++ }
+      const finish = zone ? q.finishZoneFetch : q.finishFetch
+      const stdout = () => { q[fields[1]] = true; q[fields[4]] = empty }
+      const exit = () => { q[fields[2]] = true; q[fields[3]] = exitCode }
+      ;(first === 'stdout' ? stdout : exit)()
+      finish()
+      assert.equal(applied, 0)
+      assert.equal(pumped, 0)
+      assert.equal(q[fields[0]], true)
+      ;(first === 'stdout' ? exit : stdout)()
+      finish()
+      assert.equal(applied, exitCode === 0 ? 1 : 0)
+      assert.equal(q[fields[4]], '')
+      assert.equal(q[fields[0]], false)
+      assert.equal(pumped, zone ? 1 : 0)
+      finish()
+      assert.equal(applied, exitCode === 0 ? 1 : 0)
+    }
+  }
+}
+const badZone = panel()
+badZone.zoneFetchUrl = 'https://api.weather.gov/zones/forecast/OHZ010'
+for (const raw of ['{', '{}', ' '.repeat(Model.responseByteLimit() + 1)]) {
+  badZone.applyZonePayload(raw)
+  assert.equal(Object.keys(badZone.zoneCache).length, 0)
+}
+console.log('transfer completion regression tests: ok')

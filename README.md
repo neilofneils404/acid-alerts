@@ -26,7 +26,7 @@ For locations covered by NWS in the **United States and its territories**. This 
 
 ## Install
 
-Requires an Omarchy installation with shell plugin support and a configured weather location.
+Requires an Omarchy installation with shell plugin support, curl 8.4.0 or newer, and a configured weather location.
 
 ```sh
 omarchy plugin add https://github.com/neilofneils404/acid-alerts.git --enable
@@ -112,11 +112,14 @@ The panel shows **ALERTS UNAVAILABLE** when a check fails without any cached ale
 
 Bug reports, clearer documentation, and improvements to alert handling are welcome. [Open an issue](https://github.com/neilofneils404/acid-alerts/issues) with your Omarchy version, what happened, and what you expected. Remove precise location details from logs or screenshots before sharing them.
 
-The alert model has a Node.js test suite:
+NWS alert and zone transfers are capped at 1 MiB each, including responses without a Content-Length header (requires curl 8.4.0+). Failed or truncated transfers are discarded before parsing; the parsers also check the UTF-8 byte limit. Failed zone responses are not cached. Curl runs with its default config disabled so local curl options cannot override these bounds.
+
+The model, panel state, and local HTTP transfer regression tests run with Node.js and curl:
 
 ```sh
 node tests/test-model.js
 node tests/test-panel-state.js
+node tests/test-response-limits.js
 ```
 
 Brand assets, editable SVG sources, and rendering instructions are documented in [branding/README.md](branding/README.md).

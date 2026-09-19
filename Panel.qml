@@ -35,6 +35,11 @@ Panel {
   property var zoneCache: ({})
   property var zoneQueue: []
   property string zoneFetchUrl: ""
+  property bool zoneFetchInFlight: false
+  property string zoneResponseBody: ""
+  property bool zoneResponseReady: false
+  property bool zoneRequestExited: false
+  property int zoneRequestExitCode: -1
   property bool filtersOpen: false
 
   readonly property var barIdentity: hostWidget || root
@@ -123,7 +128,8 @@ Panel {
     root.requestExited = false
     root.requestExitCode = -1
     fetchProc.command = [
-      "curl", "-fsS", "--max-time", "10",
+      "curl", "-q", "-fsS", "--max-time", "10",
+      "--max-filesize", String(Model.responseByteLimit()),
       "-A", Model.userAgent(),
       "-H", "Accept: application/geo+json",
       Model.alertsUrl(root.location)
@@ -147,9 +153,10 @@ Panel {
   // stdout and exit callbacks may arrive in either order. Never accept a body
   // from a failed request, or one started for a different location/mode.
   function finishFetch() {
-    if (!root.fetchInFlight || !root.requestExited) return
-    if (root.requestExitCode === 0 && !root.responseReady) return
+    if (!root.fetchInFlight || !root.requestExited || !root.responseReady) return
     root.fetchInFlight = false
+    var body = root.responseBody
+    root.responseBody = ""
     if (root.requestGeneration !== root.fetchGeneration) {
       Qt.callLater(root.refresh)
       return
@@ -158,7 +165,7 @@ Panel {
       root.fetchError = "NWS is unreachable"
       return
     }
-    root.applyPayload(root.responseBody)
+    root.applyPayload(body)
   }
 
   function applyDemo() {
@@ -226,13 +233,19 @@ Panel {
 
   function pumpZones() {
     if (root.demoMode) return
-    if (zoneProc.running) return
+    if (zoneProc.running || root.zoneFetchInFlight) return
     if (root.zoneQueue.length === 0) return
     var url = root.zoneQueue[0]
     root.zoneQueue = root.zoneQueue.slice(1)
     root.zoneFetchUrl = url
+    root.zoneResponseBody = ""
+    root.zoneResponseReady = false
+    root.zoneRequestExited = false
+    root.zoneRequestExitCode = -1
+    root.zoneFetchInFlight = true
     zoneProc.command = [
-      "curl", "-fsS", "--max-time", "10",
+      "curl", "-q", "-fsS", "--max-time", "10",
+      "--max-filesize", String(Model.responseByteLimit()),
       "-A", Model.userAgent(),
       "-H", "Accept: application/geo+json",
       url
@@ -240,8 +253,20 @@ Panel {
     zoneProc.running = true
   }
 
+  // Drain both callbacks before starting another zone, including failed transfers.
+  function finishZoneFetch() {
+    if (!root.zoneFetchInFlight || !root.zoneRequestExited || !root.zoneResponseReady) return
+    root.zoneFetchInFlight = false
+    var body = root.zoneResponseBody
+    root.zoneResponseBody = ""
+    if (root.zoneRequestExitCode === 0 && !root.demoMode)
+      root.applyZonePayload(body)
+    Qt.callLater(root.pumpZones)
+  }
+
   function applyZonePayload(raw) {
     var rings = Model.parseZoneDocument(raw)
+    if (rings.length === 0) return
     var nextCache = {}
     for (var key in root.zoneCache) nextCache[key] = root.zoneCache[key]
     nextCache[root.zoneFetchUrl] = rings
@@ -250,7 +275,6 @@ Panel {
     Model.attachZoneRings(next, root.zoneCache)
     root.incomingAlerts = next
     root.applyVisible()
-    root.pumpZones()
   }
 
   function persistSettings(values) {
@@ -452,10 +476,16 @@ Panel {
     id: zoneProc
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.applyZonePayload(text)
+      onStreamFinished: {
+        root.zoneResponseBody = text
+        root.zoneResponseReady = true
+        root.finishZoneFetch()
+      }
     }
     onExited: function(exitCode) {
-      if (exitCode !== 0) root.pumpZones()
+      root.zoneRequestExitCode = exitCode
+      root.zoneRequestExited = true
+      root.finishZoneFetch()
     }
   }
 

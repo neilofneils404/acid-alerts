@@ -201,9 +201,32 @@ function alertsUrl(location) {
     + encodeURIComponent(String(location.longitude))
 }
 
+// curl >= 8.4.0 enforces this even without Content-Length. Keep the parser
+// guard in bytes too, without allocating another encoded copy of the body.
+function responseByteLimit() { return 1024 * 1024 }
+
+function responseTooLarge(text) {
+  var limit = responseByteLimit()
+  if (text.length > limit) return true
+  var bytes = 0
+  for (var i = 0; i < text.length; i++) {
+    var code = text.charCodeAt(i)
+    if (code < 0x80) bytes += 1
+    else if (code < 0x800) bytes += 2
+    else if (code >= 0xD800 && code <= 0xDBFF && i + 1 < text.length
+             && text.charCodeAt(i + 1) >= 0xDC00 && text.charCodeAt(i + 1) <= 0xDFFF) {
+      bytes += 4
+      i++
+    } else bytes += 3
+    if (bytes > limit) return true
+  }
+  return false
+}
+
 function parseCollection(raw) {
   var empty = { alerts: [], error: "" }
   var text = String(raw || "")
+  if (responseTooLarge(text)) return { alerts: [], error: "NWS response exceeds size limit" }
   if (text.trim() === "") return { alerts: [], error: "empty NWS response" }
   try {
     var data = JSON.parse(text)
@@ -661,8 +684,10 @@ function simplifyRing(ring, maxPoints) {
 }
 
 function parseZoneDocument(raw) {
+  var text = String(raw || "")
+  if (responseTooLarge(text)) return []
   try {
-    var data = JSON.parse(String(raw || "{}"))
+    var data = JSON.parse(text)
     var rings = extractRings(data.geometry)
     var out = []
     for (var i = 0; i < rings.length; i++) out.push(simplifyRing(rings[i], 80))
@@ -772,6 +797,8 @@ if (typeof module !== "undefined" && module.exports) {
     locationFromSettings: locationFromSettings,
     hasCoordinates: hasCoordinates,
     alertsUrl: alertsUrl,
+    responseByteLimit: responseByteLimit,
+    responseTooLarge: responseTooLarge,
     parseCollection: parseCollection,
     normalizeAlert: normalizeAlert,
     shortEvent: shortEvent,

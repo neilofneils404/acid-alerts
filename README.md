@@ -37,7 +37,7 @@ Acid Alerts uses the location set by `omarchy-weather-location`. Open the diamon
 ## See it in action
 
 <p align="center">
-  <img src="docs/media/alert-gallery.png" alt="Actual Acid Alerts demo panels: a tornado warning with a storm polygon, an ice storm warning with a county or zone outline, and a winter storm watch for Cuyahoga County." width="1280" />
+  <img src="docs/media/alert-gallery.png" alt="Actual Acid Alerts demo panels: a tornado warning with a storm polygon, an ice storm warning with a county or zone outline, and a winter storm watch for Cuyahoga and Lorain counties." width="1280" />
 </p>
 
 **Actual plugin UI, demo data.** These are illustrative Cleveland / Cuyahoga County scenarios from the built-in gallery, not live NWS alerts. The alert text and storm polygon in demo mode are examples; county / zone outlines come from the bundled zone data. Colors follow the active Omarchy theme.
@@ -45,6 +45,10 @@ Acid Alerts uses the location set by `omarchy-weather-location`. Open the diamon
 View full-size panels: [Tornado warning](docs/media/tornado.png) · [Ice storm warning](docs/media/ice-storm.png) · [Winter storm watch](docs/media/winter-watch.png)
 
 In live mode, the plugin requests active NWS alerts for your location and applies your filters. Storm-based products can show the polygon issued by the forecast office; county- and zone-based products use NWS boundary outlines. If more than one alert is active, the bar names the most dangerous one and shows the count. Open the panel to move through the rest. The map frames the selected alert, so a storm polygon stays readable when a watch covers the whole county. Filters collapse while an alert is open to leave more room for the instruction and the full NWS description.
+
+<p align="center">
+  <img src="docs/media/multiple-alerts.png" alt="Cleveland demo with a tornado warning, winter storm watch, and flood advisory; the map frames the selected warning" width="420" />
+</p>
 
 <details>
 <summary>Explore the demo gallery</summary>
@@ -58,14 +62,14 @@ Set `"demo": true` on the Acid Alerts widget entry in `~/.config/omarchy/shell.j
 ## Make it yours
 
 <p align="center">
-  <img src="docs/media/bar-idle.png" alt="Acid Alerts pixel-diamond icon in the Omarchy bar" width="330" />
+  <img src="docs/media/bar-filtered.png" alt="Acid Alerts bar showing one alert hidden by the selected filters" width="125" />
 </p>
 
 <p align="center">
   <img src="docs/media/no-matching-alerts.png" alt="Live Acid Alerts panel after a successful NWS check: no matching alerts, warning filters, weather-family choices, and last-checked time" width="420" />
 </p>
 
-A successful live check with no alerts matching the selected filters. This is a captured example, not a current weather report.
+A successful Cleveland check with one alert hidden by the selected filters. This is a captured example, not a current weather report.
 
 Change alert filters in the panel, or edit the Acid Alerts widget entry in `~/.config/omarchy/shell.json`. Panel toggles save to the same settings.
 
@@ -83,6 +87,8 @@ Change alert filters in the panel, or edit the Acid Alerts widget entry in `~/.c
 Available families: `tornado`, `thunderstorm`, `flashflood`, `flood`, `winter`, `wind`, `cold`, `heat`, `fire`, `tropical`, `fog`, `other`.
 
 For tornado warnings only, keep **Warnings** on, leave **Watches** and **Advisories** off, and select the **Tornado** family. Filtering narrows what you see and which newly detected alerts can notify you.
+
+On a side bar, Acid Alerts uses the event icon and a count for multiple alerts. An eye-off icon marks filtered alerts, `!` means unavailable data, and `?` means a location is needed. Demo alerts retain a `DEMO` label. Hover or open the panel for full details.
 
 ### Controls
 
@@ -103,11 +109,11 @@ omarchy plugin remove neil.acid-alerts
 
 ## Weather safety
 
-Acid Alerts is an independent desktop plugin that displays official NWS data in live mode. It is not an official NWS product, and it cannot guarantee delivery of every alert. Network outages, a sleeping computer, filters, and polling delays can prevent or delay an alert. Previously unseen severe or extreme alerts can notify on the first load; lower-severity alerts have additional notification restrictions.
+Acid Alerts is an independent desktop plugin that displays official NWS data in live mode. It is not an official NWS product, and it cannot guarantee delivery of every alert. Network outages, a sleeping computer, filters, and polling delays can prevent or delay an alert. On first load, only previously unseen Severe or Extreme warning products with Immediate urgency can notify. On subsequent checks, unseen Severe or Extreme alerts, or Moderate alerts with Immediate urgency, can notify if they match your filters.
 
-The panel shows **ALERTS UNAVAILABLE** when a check fails and there is nothing current to show. The bar reads **NO DATA** in that case, rather than the idle diamond. Previously loaded alerts remain visible, with a last-known-data notice, until each message's expiration time. After that they leave the bar, and the panel says the previous alerts have expired. **NO MATCHING ALERTS** means a successful check found nothing matching your filters. If alerts are in but hidden, the bar shows the hidden count, such as **2 HIDDEN**, instead of looking clear.
+The panel shows **ALERTS UNAVAILABLE** when a check fails and there is nothing current to show. The bar reads **NO DATA** in that case, rather than the idle diamond. Previously loaded alerts remain visible, with a last-known-data notice, until each message's expiration time. Expiration is checked every second while cached alerts are shown during an outage. After expiration they leave the bar, and the panel says the previous alerts have expired. **NO MATCHING ALERTS** means a successful check found nothing matching your filters. If alerts are in but hidden, the bar shows the hidden count, such as **2 HIDDEN**, instead of looking clear.
 
-Test, exercise, and cancelled products are ignored. A new Severe or Extreme alert can notify after the first check. On that first check, only an immediate warning notifies, so a heat or winter warning that is already in effect does not page you the moment the plugin loads.
+Test, exercise, and cancelled products are ignored. Notification decisions use NWS severity and urgency fields; a warning with Immediate urgency can notify on startup even if it was issued before the plugin started.
 
 **An empty panel is not a guarantee of safe weather.** Keep Wireless Emergency Alerts enabled, have access to NOAA Weather Radio, and follow instructions from your local weather office and emergency officials.
 

@@ -506,8 +506,8 @@ function shouldNotify(alert, seen, firstLoad) {
   if (!alert || !alert.id) return false
   if (seen && seen[alert.id]) return false
   // The first check only interrupts for a warning that needs action now.
-  // A heat or winter warning that has already been in effect can wait.
-  if (firstLoad) return alert.rank >= 3 && alert.urgencyRank >= 3
+  // Expected/Future urgency does not interrupt on startup.
+  if (firstLoad) return eventClass(alert.event) === "warning" && alert.rank >= 3 && alert.urgencyRank >= 3
   if (alert.rank >= 3) return true
   if (alert.rank >= 2 && alert.urgencyRank >= 3) return true
   return false
@@ -838,7 +838,8 @@ function attachZoneRings(alerts, cache) {
   for (var i = 0; i < alerts.length; i++) {
     var alert = alerts[i]
     if (!alert) continue
-    if ((alert.polygons && alert.polygons.length > 0) || (alert.rings && alert.rings.length > 0)) continue
+    // Rebuild derived outlines as more zones arrive; preserve issued polygons.
+    if (alert.geometryKind !== "zone" && ((alert.polygons && alert.polygons.length > 0) || (alert.rings && alert.rings.length > 0))) continue
     var urls = alert.zoneUrls || []
     var polygons = []
     for (var j = 0; j < urls.length; j++) {
@@ -861,7 +862,7 @@ function missingZoneUrls(alerts, cache) {
   if (!alerts) return urls
   for (var i = 0; i < alerts.length; i++) {
     var alert = alerts[i]
-    if (!alert || (alert.rings && alert.rings.length > 0)) continue
+    if (!alert || (alert.geometryKind !== "zone" && alert.rings && alert.rings.length > 0)) continue
     var list = alert.zoneUrls || []
     for (var j = 0; j < list.length; j++) {
       var url = list[j]

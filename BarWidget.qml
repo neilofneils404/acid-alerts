@@ -25,6 +25,20 @@ BarWidget {
     var value = root.settings ? root.settings.hideWhenClear : false
     return value === true || value === 1 || value === "true" || value === "1" || value === "yes"
   }
+  // Side bars have room for symbols and counts, not event names.
+  readonly property var verticalAlertLabels: {
+    var rows = [root.barIcon || "!"]
+    if (root.alertCount > 1) rows.push(String(root.alertCount))
+    if (root.barMood === "demo") rows.push("DEMO")
+    return rows
+  }
+  readonly property var verticalStateLabels: {
+    if (root.barMood === "unavailable") return ["!"]
+    if (root.barMood === "setup") return ["?"]
+    if (root.barMood === "filtered") return ["", root.idleLabel.split(" ")[0]]
+    if (root.barMood === "demo") return ["DEMO"]
+    return []
+  }
   readonly property var anchorButton: hasAlerts ? alertButton : (showState ? stateButton : idleButton)
 
   function open() {
@@ -55,7 +69,7 @@ BarWidget {
     panelLoader.item.hostWidget = root
   }
 
-  visible: !hideWhenClear || (barMood !== "clear" && barMood !== "checking")
+  visible: !hideWhenClear || barMood !== "clear"
   implicitWidth: hasAlerts ? alertButton.implicitWidth : (showState ? stateButton.implicitWidth : idleButton.implicitWidth)
   implicitHeight: hasAlerts ? alertButton.implicitHeight : (showState ? stateButton.implicitHeight : idleButton.implicitHeight)
 
@@ -115,21 +129,29 @@ BarWidget {
       else if (buttonCode === Qt.LeftButton) root.toggle()
     }
 
+    fixedHeight: root.vertical ? stateColumn.implicitHeight : -1
+
     Column {
+      id: stateColumn
       visible: root.vertical
       anchors.fill: parent
 
       Repeater {
-        model: root.idleLabel === "" ? [] : root.idleLabel.split(" ")
+        model: root.verticalStateLabels
 
-        OpticalGlyph {
+        Text {
           required property string modelData
           width: stateButton.width
           height: Style.bar.iconSlot
           text: modelData
-          fontFamily: stateButton.fontFamily
-          fontSize: modelData.length > 4 ? stateButton.fontSize * 0.9 : stateButton.fontSize
-          color: stateButton.foreground
+          textFormat: Text.PlainText
+          fontSizeMode: Text.HorizontalFit
+          minimumPixelSize: 6
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+          font.family: stateButton.fontFamily
+          font.pixelSize: modelData === "DEMO" ? Style.font.caption : Style.bar.iconFont
+          color: stateButton.active ? stateButton.activeColor : stateButton.foreground
         }
       }
     }
@@ -153,21 +175,29 @@ BarWidget {
       else if (buttonCode === Qt.LeftButton) root.toggle()
     }
 
+    fixedHeight: root.vertical ? alertColumn.implicitHeight : -1
+
     Column {
+      id: alertColumn
       visible: root.vertical
       anchors.fill: parent
 
       Repeater {
-        model: (root.barIcon !== "" ? [root.barIcon] : []).concat(root.label.split(" "))
+        model: root.verticalAlertLabels
 
-        OpticalGlyph {
+        Text {
           required property string modelData
           width: alertButton.width
           height: Style.bar.iconSlot
           text: modelData
-          fontFamily: alertButton.fontFamily
-          fontSize: modelData.length > 4 ? alertButton.fontSize * 0.9 : alertButton.fontSize
-          color: alertButton.foreground
+          textFormat: Text.PlainText
+          fontSizeMode: Text.HorizontalFit
+          minimumPixelSize: 6
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+          font.family: alertButton.fontFamily
+          font.pixelSize: modelData === root.barIcon ? Style.bar.iconFont : Style.font.caption
+          color: alertButton.active ? alertButton.activeColor : alertButton.foreground
         }
       }
     }

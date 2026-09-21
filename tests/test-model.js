@@ -36,10 +36,10 @@ assert.strictEqual(Model.barLabel(parsed.alerts, false), "FLOOD ADV")
 assert.strictEqual(Model.barLabel(parsed.alerts.concat(parsed.alerts), false), "2 · FLOOD ADV")
 
 assert.strictEqual(Model.shouldNotify(alert, {}, true), false)
-assert.strictEqual(Model.shouldNotify({ id: "w", rank: 3, urgencyRank: 3 }, {}, true), true)
+assert.strictEqual(Model.shouldNotify({ id: "w", event: "Tornado Warning", rank: 3, urgencyRank: 3 }, {}, true), true)
 assert.strictEqual(Model.shouldNotify({ id: "heat", rank: 3, urgencyRank: 2 }, {}, true), false)
 assert.strictEqual(Model.shouldNotify({ id: "heat", rank: 3, urgencyRank: 2 }, {}, false), true)
-assert.strictEqual(Model.shouldNotify({ id: "w", rank: 3, urgencyRank: 3 }, { w: 1 }, false), false)
+assert.strictEqual(Model.shouldNotify({ id: "w", event: "Tornado Warning", rank: 3, urgencyRank: 3 }, { w: 1 }, false), false)
 assert.strictEqual(Model.leadUrgent({ event: "Freeze Warning", rank: 2 }), true)
 assert.strictEqual(Model.leadUrgent({ event: "Flood Advisory", rank: 1 }), false)
 
@@ -184,3 +184,21 @@ assert.deepStrictEqual(kept.map((item) => item.id), ["live", "open"])
 assert.ok(future > past)
 
 console.log("ok")
+
+// Partial zone downloads must keep growing the footprint and retry missing zones.
+const zoneA = "https://api.weather.gov/zones/county/OHC035"
+const zoneB = "https://api.weather.gov/zones/county/OHC093"
+const zoneAlert = { zoneUrls: [zoneA, zoneB], rings: [], polygons: [] }
+const zoneCache = { [zoneA]: [[west]] }
+Model.attachZoneRings([zoneAlert], zoneCache)
+assert.equal(zoneAlert.polygons.length, 1)
+assert.deepEqual(Model.missingZoneUrls([zoneAlert], zoneCache), [zoneB])
+zoneCache[zoneB] = [[east]]
+Model.attachZoneRings([zoneAlert], zoneCache)
+assert.equal(zoneAlert.polygons.length, 2)
+Model.attachZoneRings([zoneAlert], zoneCache)
+assert.equal(zoneAlert.polygons.length, 2, "reattaching does not duplicate polygons")
+const storm = { geometryKind: "polygon", rings: [west], polygons: [[west]], zoneUrls: [zoneB] }
+Model.attachZoneRings([storm], zoneCache)
+assert.equal(storm.polygons.length, 1, "issued storm geometry is preserved")
+assert.equal(Model.shouldNotify({ id: "watch", event: "Tornado Watch", rank: 3, urgencyRank: 3 }, {}, true), false)

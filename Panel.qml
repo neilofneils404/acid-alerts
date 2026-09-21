@@ -63,9 +63,11 @@ Panel {
   readonly property var selected: alertCount === 0 ? null : alerts[Math.max(0, Math.min(selectedIndex, alertCount - 1))]
   readonly property string label: {
     var text = Model.barLabel(alerts, !!(bar && bar.vertical))
-    if (root.demoMode && text !== "" && !(bar && bar.vertical)) return "DEMO · " + text
+    if (root.demoMode && text !== "") return "DEMO" + ((bar && bar.vertical) ? " " : " · ") + text
     return text
   }
+  readonly property string selectedIcon: selected ? selected.icon : ""
+  readonly property bool selectedUrgent: !root.demoMode && Model.leadUrgent(selected)
   // The bar stays on the most dangerous alert. Selection changes the panel only.
   readonly property string barIcon: alertCount > 0 && alerts[0] ? alerts[0].icon : ""
   readonly property bool warningActive: !root.demoMode && alertCount > 0 && Model.leadUrgent(alerts[0])
@@ -604,6 +606,14 @@ Panel {
     onTriggered: root.refresh()
   }
 
+  // Expiration must not wait for another (possibly very infrequent) poll.
+  Timer {
+    interval: 1000
+    running: !root.demoMode && root.fetchError !== "" && root.alertCount > 0
+    repeat: true
+    onTriggered: root.applyVisible()
+  }
+
   Process {
     id: zoneProc
     stdout: StdioCollector {
@@ -695,6 +705,7 @@ Panel {
               spacing: Style.space(10)
 
               BrandMark {
+                id: headingMark
                 visible: root.alertCount === 0
                 anchors.verticalCenter: parent.verticalCenter
                 cell: 2
@@ -703,18 +714,19 @@ Panel {
               }
 
               Text {
-                visible: root.alertCount > 0 && root.barIcon !== ""
-                text: root.barIcon
-                color: root.warningActive ? root.contentUrgent : root.contentForeground
+                id: headingIcon
+                visible: root.alertCount > 0 && root.selectedIcon !== ""
+                text: root.selectedIcon
+                color: root.selectedUrgent ? root.contentUrgent : root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.display
                 textFormat: Text.PlainText
               }
 
               Text {
-                width: parent.width - (root.barIcon !== "" ? Style.space(36) : 0)
+                width: parent.width - parent.spacing - (headingMark.visible ? headingMark.width : headingIcon.implicitWidth)
                 text: root.statusHeading()
-                color: root.warningActive ? root.contentUrgent : root.contentForeground
+                color: root.selectedUrgent ? root.contentUrgent : root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.heading
                 font.bold: true

@@ -25,19 +25,22 @@ The script reads the pixel pattern directly from `BrandMark.qml`, writes the SVG
 
 ## Screenshot provenance
 
-Screenshots were captured directly from the running plugin on September 18, 2026, on a 1920 × 1080 display at display scale 1. The shell's supported text-size setting was temporarily increased from 10 to 18 for legibility, producing native 540-pixel-wide panels. Normal text size and live alert mode were restored after capture.
+Screenshots were captured directly from the running plugin on September 21, 2026, after reviewing commit `e48cf5b` and applying the follow-up fixes in this working tree. The display was 1920 × 1080 at scale 1.25; the shell font base size was temporarily set to 16. Original shell settings and live mode were restored after capture.
 
 | Screenshot | Native size | Mode |
 | --- | --- | --- |
-| `tornado.png` | 540 × 665 | Demo scene 1 |
-| `winter-watch.png` | 540 × 642 | Demo scene 10 |
-| `ice-storm.png` | 540 × 642 | Demo scene 11 |
-| `no-matching-alerts.png` | 540 × 678 | Live, successful NWS check |
-| `bar-idle.png` | 330 × 39 | Live, closed panel |
+| `tornado.png` | 600 × 852 | Demo scene 1 |
+| `winter-watch.png` | 600 × 823 | Demo scene 10 |
+| `ice-storm.png` | 600 × 823 | Demo scene 11 |
+| `multiple-alerts.png` | 600 × 1005 | Demo scene 19 |
+| `no-matching-alerts.png` | 600 × 757 | Live Cleveland check, warnings only |
+| `bar-filtered.png` | 125 × 43 | Live Cleveland check, one hidden alert |
 
-Only plugin panel or bar regions were captured; unrelated desktop windows are excluded. No UI, alert text, colors, or map shapes were reconstructed or retouched. Complete panel borders and demo footers are retained. Text truncated by the running plugin remains truncated in the images.
+Only plugin panel or bar regions were captured; unrelated desktop windows are excluded. No UI, alert text, colors, or map shapes were reconstructed or retouched. Full panel borders and demo labels are retained.
 
-The three alert panels show the built-in `Demo.js` gallery centered on Cleveland, Ohio, with Cuyahoga County outlines. Its instruction text and storm polygon are illustrative, not a live NWS product. County / zone outlines use the bundled demo zone atlas. A temporary plugin-only location override selected Cleveland (41.4993, -81.6944); the system weather location was never changed. The no-matching-alerts screenshot records one successful Cleveland check, not a current weather report or a guarantee of safe conditions.
+All screenshots use a temporary plugin-only Cleveland override (41.4993, -81.6944); the system weather location was never changed. Demo instructions and storm polygons are illustrative, not live NWS products. County / zone outlines use the bundled atlas: the winter watch covers Cuyahoga and Lorain counties. The multiple-alert screenshot shows the warning selected alongside a watch and advisory.
+
+The live panel and bar record a successful Cleveland check with one product hidden by warning-only filters. They are captured examples, not a current weather report or a guarantee of safe conditions. `bar-filtered.png` replaces the older idle-bar screenshot to illustrate the explicit hidden-alert state.
 
 Marketing compositions add headings and a dark background outside the screenshots. Their lime accent is branding, not a claim about the active theme. Header and gallery exports use higher-resolution canvases and preserve the screenshots' native aspect ratios. The obsolete `all-clear.png` has been removed.
 

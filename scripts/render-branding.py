@@ -29,11 +29,13 @@ def mark(x, y, cell):
                    for j, row in enumerate(ROWS) for i, v in enumerate(row) if v != '.')
 
 
-def screenshot(name, x, y, w, h=None):
+def screenshot(name, x, y, w, max_height):
     raw = (MEDIA / name).read_bytes()
     native_w, native_h = struct.unpack('>II', raw[16:24])
-    if h is None:
-        h = w * native_h / native_w
+    fitted_w = min(w, max_height * native_w / native_h)
+    x += (w - fitted_w) / 2
+    w = fitted_w
+    h = w * native_h / native_w
     data = base64.b64encode(raw).decode()
     return f'<image x="{x}" y="{y}" width="{w}" height="{h}" href="data:image/png;base64,{data}"/>'
 
@@ -67,7 +69,7 @@ def hero():
     s += rect(814, 99, 8, 8, '#ff8b43')
     s += text(834, 111, 'TORNADO WARNING', 16, INK, 500, True)
     s += rect(814, 131, 396, 1, '#354137')
-    s += screenshot('tornado.png', 862, 143, 300)
+    s += screenshot('tornado.png', 862, 143, 300, 380)
     s += text(814, 548, 'ACTUAL UI / DEMO DATA', 13, MUTED, 400, True)
     export('hero', 1280, 640, s, MEDIA / 'hero.png', 'Acid Alerts — weather alerts within reach. Actual Omarchy plugin UI with demo data.', scale=1.5)
     # A separate filename makes the intended GitHub social upload explicit.
@@ -88,7 +90,7 @@ def gallery():
         s += rect(x, 139, 384, 500, PANEL, 'rx="10" stroke="#354137"')
         s += text(x+24, 174, n, 14, LIME, 500, True)
         s += text(x+24, 208, title, 23, INK, 700)
-        s += screenshot(filename, x+42, 234, 300)
+        s += screenshot(filename, x+42, 234, 300, 355)
         s += text(x+24, 617, caption, 15, MUTED, 400, True)
     s += text(48, 682, 'DEMO GALLERY', 14, LIME, 500, True)
     s += text(240, 682, 'Illustrative scenarios, not live alerts. Appearance follows your Omarchy theme.', 16, MUTED)

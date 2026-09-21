@@ -27,7 +27,7 @@ function scenes(atlas) {
     scene("tornado-watch", "Tornado Watch", [
       alert("Tornado Watch", "Moderate", "Expected", "Possible",
         "Be ready. A tornado watch means conditions are favorable. Have a way to receive warnings and know where you will take shelter. This watch covers a broad area; a warning means take cover now.",
-        "Cuyahoga County, OH", 4, watchCounties, "zone")
+        "Cuyahoga and Lorain counties, OH", 4, watchCounties, "zone")
     ]),
     scene("severe-thunderstorm-warning", "Severe Thunderstorm Warning", [
       alert("Severe Thunderstorm Warning", "Severe", "Immediate", "Observed",
@@ -37,7 +37,7 @@ function scenes(atlas) {
     scene("severe-thunderstorm-watch", "Severe Thunderstorm Watch", [
       alert("Severe Thunderstorm Watch", "Moderate", "Expected", "Possible",
         "A severe thunderstorm watch means conditions are favorable for severe storms with damaging wind and large hail. Be prepared to move to shelter if a warning is issued.",
-        "Cuyahoga County, OH", 5, watchCounties, "zone")
+        "Cuyahoga and Lorain counties, OH", 5, watchCounties, "zone")
     ]),
     scene("flash-flood-warning", "Flash Flood Warning", [
       alert("Flash Flood Warning", "Severe", "Immediate", "Likely",
@@ -67,7 +67,7 @@ function scenes(atlas) {
     scene("winter-storm-watch", "Winter Storm Watch", [
       alert("Winter Storm Watch", "Moderate", "Future", "Possible",
         "A winter storm watch means significant snow, sleet, or ice is possible. Plan to avoid travel and have extra supplies on hand if the watch is upgraded to a warning.",
-        "Cuyahoga County, OH", 30, watchCounties, "zone")
+        "Cuyahoga and Lorain counties, OH", 30, watchCounties, "zone")
     ]),
     scene("ice-storm-warning", "Ice Storm Warning", [
       alert("Ice Storm Warning", "Severe", "Expected", "Likely",
@@ -115,7 +115,7 @@ function scenes(atlas) {
         "Cleveland, OH", 0.4, wedge(), "polygon"),
       alert("Winter Storm Watch", "Moderate", "Future", "Possible",
         "Significant snow is possible behind the severe weather. Have extra supplies on hand.",
-        "Cuyahoga County, OH", 24, watchCounties, "zone"),
+        "Cuyahoga and Lorain counties, OH", 24, watchCounties, "zone"),
       alert("Flood Advisory", "Minor", "Expected", "Likely",
         "Turn around, don't drown when encountering flooded roads.",
         "Cuyahoga County, OH", 3, ponding(), "polygon")

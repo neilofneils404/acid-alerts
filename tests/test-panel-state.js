@@ -18,12 +18,13 @@ function panel() {
     requestExited: false, requestExitCode: -1, responseBody: '',
     zoneCache: {}, lastUpdated: '', firstLoad: true,
     filter: Model.parseFilter({ showAdvisories: true }),
-    refreshCalls: 0,
+    refreshCalls: 0, selectedId: '', heldExpired: false,
+    seenHydrated: false, notifyWhenReady: false, zoneGeneration: 0, zoneRequestGeneration: 0,
   }
   Object.defineProperties(root, {
     selected: { get: () => root.alerts[root.selectedIndex] || null },
     alertCount: { get: () => root.alerts.length },
-    filteredOut: { get: () => root.incomingAlerts.length > 0 && !root.alerts.length },
+    filteredOut: { get: () => !root.demoMode && !root.heldExpired && root.incomingAlerts.length > 0 && !root.alerts.length },
   })
   const context = vm.createContext({
     root, Model,
@@ -250,3 +251,19 @@ for (const raw of ['{', '{}', ' '.repeat(Model.responseByteLimit() + 1)]) {
   assert.equal(Object.keys(badZone.zoneCache).length, 0)
 }
 console.log('transfer completion regression tests: ok')
+
+// Cached alerts age out independently of network completion.
+const aging = panel()
+aging.incomingAlerts = [Model.normalizeAlert({ properties: {
+  id: 'aging', event: 'Tornado Warning', severity: 'Extreme',
+  expires: '2099-01-01T00:00:00Z',
+} })]
+aging.fetchError = 'NWS is unreachable'
+aging.applyVisible()
+assert.equal(aging.alertCount, 1)
+aging.incomingAlerts[0].expires = '2000-01-01T00:00:00Z'
+aging.applyVisible()
+assert.equal(aging.alertCount, 0)
+assert.equal(aging.heldExpired, true)
+assert.equal(aging.filteredOut, false)
+assert.match(source, /interval: 1000\s+running: !root.demoMode && root.fetchError !== "" && root.alertCount > 0\s+repeat: true\s+onTriggered: root.applyVisible\(\)/)

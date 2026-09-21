@@ -27,10 +27,10 @@ var SHORT_EVENT = {
   "Flash Flood Statement": "FLASH FLOOD",
   "Flood Warning": "FLOOD",
   "Flood Watch": "FLOOD WATCH",
-  "Flood Advisory": "FLOOD",
+  "Flood Advisory": "FLOOD ADV",
   "Coastal Flood Warning": "COASTAL FLD",
-  "Coastal Flood Watch": "COASTAL FLD",
-  "Coastal Flood Advisory": "COASTAL FLD",
+  "Coastal Flood Watch": "CSTL WATCH",
+  "Coastal Flood Advisory": "CSTL ADV",
   "Storm Surge Warning": "SURGE",
   "Storm Surge Watch": "SURGE WATCH",
   "Hurricane Warning": "HURRICANE",
@@ -56,25 +56,25 @@ var SHORT_EVENT = {
   "Blizzard Watch": "BLIZ WATCH",
   "Winter Storm Warning": "WINTER",
   "Winter Storm Watch": "WINTER WATCH",
-  "Winter Weather Advisory": "WINTER",
+  "Winter Weather Advisory": "WINTER ADV",
   "Ice Storm Warning": "ICE STORM",
   "Lake Effect Snow Warning": "LE SNOW",
-  "Lake Effect Snow Advisory": "LE SNOW",
+  "Lake Effect Snow Advisory": "SNOW ADV",
   "Snow Squall Warning": "SNOW SQUALL",
   "Freezing Rain Advisory": "FZ RAIN",
   "Freezing Fog Advisory": "FRZ FOG",
   "Wind Chill Warning": "WIND CHILL",
-  "Wind Chill Watch": "WIND CHILL",
-  "Wind Chill Advisory": "WIND CHILL",
+  "Wind Chill Watch": "CHILL WATCH",
+  "Wind Chill Advisory": "CHILL ADV",
   "Extreme Cold Warning": "EXT COLD",
-  "Extreme Cold Watch": "EXT COLD",
+  "Extreme Cold Watch": "COLD WATCH",
   "Freeze Warning": "FREEZE",
   "Hard Freeze Warning": "HARD FRZ",
   "Frost Advisory": "FROST",
   "Excessive Heat Warning": "HEAT",
   "Excessive Heat Watch": "HEAT WATCH",
   "Extreme Heat Warning": "HEAT",
-  "Heat Advisory": "HEAT",
+  "Heat Advisory": "HEAT ADV",
   "Red Flag Warning": "RED FLAG",
   "Special Marine Warning": "MARINE",
   "Gale Warning": "GALE",
@@ -240,6 +240,7 @@ function parseCollection(raw) {
     for (var i = 0; i < features.length; i++) {
       var alert = normalizeAlert(features[i])
       if (!alert) return { alerts: [], error: "unreadable NWS alert" }
+      if (alert.skip) continue
       alerts.push(alert)
     }
     alerts.sort(compareAlerts)
@@ -249,17 +250,33 @@ function parseCollection(raw) {
   }
 }
 
+// Follow-ups that replace a warning in the active feed. They are not advisories.
+var WARNING_FOLLOWUPS = {
+  "Flash Flood Statement": true,
+  "Flood Statement": true,
+  "Severe Weather Statement": true
+}
+
+function skippedProduct(properties) {
+  var status = String(properties.status || "")
+  if (status !== "" && status !== "Actual") return true
+  var messageType = String(properties.messageType || "")
+  return messageType === "Cancel"
+}
+
 function normalizeAlert(feature) {
   if (!feature || typeof feature !== "object") return null
   var properties = feature.properties || {}
   var event = String(properties.event || "").replace(/^\s+|\s+$/g, "")
   if (event === "") return null
+  if (skippedProduct(properties)) return { skip: true }
   var severity = knownOrUnknown(properties.severity, SEVERITY_RANK)
   var urgency = knownOrUnknown(properties.urgency, URGENCY_RANK)
   var certainty = String(properties.certainty || "Unknown")
   var id = String(properties.id || feature.id || "")
   if (id === "") id = event + "|" + String(properties.sent || "") + "|" + String(properties.areaDesc || "")
-  var rings = extractRings(feature.geometry)
+  var polygons = extractPolygons(feature.geometry)
+  var rings = flattenPolygons(polygons)
   var kind = String(properties.geometryKind || "")
   if (kind === "" && rings.length > 0) kind = "polygon"
   return {
@@ -278,10 +295,14 @@ function normalizeAlert(feature) {
     area: String(properties.areaDesc || ""),
     sent: String(properties.sent || ""),
     onset: String(properties.onset || properties.effective || properties.sent || ""),
-    expires: String(properties.expires || properties.ends || ""),
+    expires: String(properties.expires || ""),
+    ends: String(properties.ends || ""),
     response: String(properties.response || ""),
     messageType: String(properties.messageType || ""),
+    sender: String(properties.senderName || "").replace(/^\s+|\s+$/g, ""),
+    category: String(properties.category || ""),
     rings: rings,
+    polygons: polygons,
     zoneUrls: extractZoneUrls(properties),
     geometryKind: kind
   }
@@ -383,8 +404,16 @@ function isWarningRank(rank) {
   return Number(rank) >= 3
 }
 
+// The bar treats the highest-ranked alert as current. A warning stays urgent
+// even when NWS ranks it Moderate, so a flood or freeze warning is not quiet.
+function leadUrgent(alert) {
+  if (!alert) return false
+  return eventClass(alert.event) === "warning" || isWarningRank(alert.rank)
+}
+
 function eventClass(event) {
   var name = String(event || "")
+  if (WARNING_FOLLOWUPS[name]) return "warning"
   if (/Warning$/i.test(name)) return "warning"
   if (/Watch$/i.test(name)) return "watch"
   return "advisory"
@@ -393,7 +422,7 @@ function eventClass(event) {
 function familyOf(event) {
   var text = String(event || "").toLowerCase()
   if (text.indexOf("tornado") !== -1) return "tornado"
-  if (text.indexOf("thunder") !== -1) return "thunderstorm"
+  if (text.indexOf("thunder") !== -1 || text.indexOf("severe weather statement") !== -1) return "thunderstorm"
   if (text.indexOf("flash flood") !== -1) return "flashflood"
   if (text.indexOf("flood") !== -1 || text.indexOf("surge") !== -1) return "flood"
   if (text.indexOf("winter") !== -1 || text.indexOf("ice") !== -1 || text.indexOf("blizzard") !== -1 || text.indexOf("snow") !== -1 || text.indexOf("freezing") !== -1) return "winter"
@@ -476,10 +505,26 @@ function filterAlerts(alerts, filter) {
 function shouldNotify(alert, seen, firstLoad) {
   if (!alert || !alert.id) return false
   if (seen && seen[alert.id]) return false
+  // The first check only interrupts for a warning that needs action now.
+  // A heat or winter warning that has already been in effect can wait.
+  if (firstLoad) return alert.rank >= 3 && alert.urgencyRank >= 3
   if (alert.rank >= 3) return true
-  if (firstLoad) return false
   if (alert.rank >= 2 && alert.urgencyRank >= 3) return true
   return false
+}
+
+function unexpired(alerts, nowMs) {
+  var out = []
+  var now = Number(nowMs)
+  if (!alerts) return out
+  for (var i = 0; i < alerts.length; i++) {
+    var alert = alerts[i]
+    if (!alert) continue
+    var stamp = Date.parse(alert.expires || "")
+    if (isFinite(stamp) && isFinite(now) && stamp <= now) continue
+    out.push(alert)
+  }
+  return out
 }
 
 function mergeSeen(seen, alerts, nowMs, maxAgeMs) {
@@ -523,21 +568,41 @@ function serializeSeen(seen) {
   return JSON.stringify({ seen: seen && typeof seen === "object" ? seen : {} })
 }
 
-function extractRings(geometry) {
+// A polygon is an outer ring plus any holes. A MultiPolygon is several of
+// those, and each county or zone outline is its own polygon. Flattening them
+// into one ring list makes later shapes count as holes.
+function extractPolygons(geometry) {
   if (!geometry || typeof geometry !== "object") return []
   var type = String(geometry.type || "")
   var coordinates = geometry.coordinates
   if (!coordinates) return []
-  if (type === "Polygon") return polygonRings(coordinates)
+  if (type === "Polygon") {
+    var rings = polygonRings(coordinates)
+    return rings.length > 0 ? [rings] : []
+  }
   if (type === "MultiPolygon") {
-    var rings = []
+    var polygons = []
     for (var i = 0; i < coordinates.length; i++) {
       var part = polygonRings(coordinates[i])
-      for (var j = 0; j < part.length; j++) rings.push(part[j])
+      if (part.length > 0) polygons.push(part)
     }
-    return rings
+    return polygons
   }
   return []
+}
+
+function flattenPolygons(polygons) {
+  var rings = []
+  if (!polygons) return rings
+  for (var i = 0; i < polygons.length; i++) {
+    var polygon = polygons[i] || []
+    for (var j = 0; j < polygon.length; j++) rings.push(polygon[j])
+  }
+  return rings
+}
+
+function extractRings(geometry) {
+  return flattenPolygons(extractPolygons(geometry))
 }
 
 function polygonRings(coordinates) {
@@ -602,15 +667,50 @@ function boundsFor(rings, userLat, userLon, pad) {
   }
 }
 
+function latitudeScale(lat) {
+  var cosine = Math.cos(Number(lat) * Math.PI / 180)
+  if (!isFinite(cosine) || cosine < 0.2) return 0.2
+  return cosine
+}
+
+// Fit the geographic box into the pixel grid at one ground scale, so a
+// degree of longitude is shorter than a degree of latitude away from the equator.
+function frameFor(bounds, width, height) {
+  if (!bounds || width < 1 || height < 1) return null
+  var midLat = (bounds.minLat + bounds.maxLat) / 2
+  var scale = latitudeScale(midLat)
+  var x0 = bounds.minLon * scale
+  var y1 = bounds.maxLat
+  var worldW = (bounds.maxLon - bounds.minLon) * scale
+  var worldH = bounds.maxLat - bounds.minLat
+  if (!(worldW > 0) || !(worldH > 0)) return null
+  var pixel = Math.min(width / worldW, height / worldH)
+  return {
+    scale: scale,
+    x0: x0,
+    y1: y1,
+    pixel: pixel,
+    ox: (width - worldW * pixel) / 2,
+    oy: (height - worldH * pixel) / 2
+  }
+}
+
 function project(lon, lat, bounds, width, height) {
-  if (!bounds) return null
-  var xSpan = bounds.maxLon - bounds.minLon
-  var ySpan = bounds.maxLat - bounds.minLat
-  if (xSpan === 0 || ySpan === 0) return null
-  var x = ((Number(lon) - bounds.minLon) / xSpan) * width
-  var y = ((bounds.maxLat - Number(lat)) / ySpan) * height
+  var frame = frameFor(bounds, width, height)
+  if (!frame) return null
+  var x = frame.ox + (Number(lon) * frame.scale - frame.x0) * frame.pixel
+  var y = frame.oy + (frame.y1 - Number(lat)) * frame.pixel
   if (!isFinite(x) || !isFinite(y)) return null
   return { x: x, y: y }
+}
+
+function unproject(x, y, bounds, width, height) {
+  var frame = frameFor(bounds, width, height)
+  if (!frame || !(frame.pixel > 0)) return null
+  var lon = (frame.x0 + (Number(x) - frame.ox) / frame.pixel) / frame.scale
+  var lat = frame.y1 - (Number(y) - frame.oy) / frame.pixel
+  if (!isFinite(lon) || !isFinite(lat)) return null
+  return { lon: lon, lat: lat }
 }
 
 function pointInRing(lon, lat, ring) {
@@ -628,25 +728,37 @@ function pointInRing(lon, lat, ring) {
   return inside
 }
 
-function pointInRings(lon, lat, rings) {
-  if (!rings || rings.length === 0) return false
-  if (!pointInRing(lon, lat, rings[0])) return false
-  for (var i = 1; i < rings.length; i++) {
-    if (pointInRing(lon, lat, rings[i])) return false
+function pointInPolygons(lon, lat, polygons) {
+  if (!polygons) return false
+  for (var i = 0; i < polygons.length; i++) {
+    var polygon = polygons[i]
+    if (!polygon || polygon.length === 0) continue
+    if (!pointInRing(lon, lat, polygon[0])) continue
+    var insideHole = false
+    for (var hole = 1; hole < polygon.length; hole++) {
+      if (pointInRing(lon, lat, polygon[hole])) {
+        insideHole = true
+        break
+      }
+    }
+    if (!insideHole) return true
   }
-  return true
+  return false
 }
 
-function rasterCells(rings, bounds, columns, rows) {
+// One polygon: the first ring is the outline and the rest are holes.
+function pointInRings(lon, lat, rings) {
+  if (!rings || rings.length === 0) return false
+  return pointInPolygons(lon, lat, [rings])
+}
+
+function rasterCells(polygons, bounds, columns, rows) {
   var cells = []
-  if (!bounds || columns < 1 || rows < 1) return cells
-  var xSpan = bounds.maxLon - bounds.minLon
-  var ySpan = bounds.maxLat - bounds.minLat
+  if (!bounds || columns < 1 || rows < 1 || !polygons) return cells
   for (var row = 0; row < rows; row++) {
-    var lat = bounds.maxLat - ((row + 0.5) / rows) * ySpan
     for (var col = 0; col < columns; col++) {
-      var lon = bounds.minLon + ((col + 0.5) / columns) * xSpan
-      if (pointInRings(lon, lat, rings)) cells.push(row * columns + col)
+      var geo = unproject(col + 0.5, row + 0.5, bounds, columns, rows)
+      if (geo && pointInPolygons(geo.lon, geo.lat, polygons)) cells.push(row * columns + col)
     }
   }
   return cells
@@ -661,6 +773,7 @@ function mapLayers(alerts, selectedId) {
     layers.push({
       id: alert.id,
       rings: alert.rings,
+      polygons: alert.polygons || [],
       rank: alert.rank,
       kind: alert.geometryKind || "",
       selected: alert.id === selectedId
@@ -688,9 +801,14 @@ function parseZoneDocument(raw) {
   if (responseTooLarge(text)) return []
   try {
     var data = JSON.parse(text)
-    var rings = extractRings(data.geometry)
+    var polygons = extractPolygons(data && data.geometry)
     var out = []
-    for (var i = 0; i < rings.length; i++) out.push(simplifyRing(rings[i], 80))
+    for (var i = 0; i < polygons.length; i++) {
+      var simplified = []
+      var polygon = polygons[i]
+      for (var j = 0; j < polygon.length; j++) simplified.push(simplifyRing(polygon[j], 80))
+      if (simplified.length > 0) out.push(simplified)
+    }
     return out
   } catch (e) {
     return []
@@ -720,16 +838,17 @@ function attachZoneRings(alerts, cache) {
   for (var i = 0; i < alerts.length; i++) {
     var alert = alerts[i]
     if (!alert) continue
-    if (alert.rings && alert.rings.length > 0) continue
+    if ((alert.polygons && alert.polygons.length > 0) || (alert.rings && alert.rings.length > 0)) continue
     var urls = alert.zoneUrls || []
-    var rings = []
+    var polygons = []
     for (var j = 0; j < urls.length; j++) {
       var got = cache && cache[urls[j]]
       if (!got) continue
-      for (var k = 0; k < got.length; k++) rings.push(got[k])
+      for (var k = 0; k < got.length; k++) polygons.push(got[k])
     }
-    if (rings.length > 0) {
-      alert.rings = rings
+    if (polygons.length > 0) {
+      alert.polygons = polygons
+      alert.rings = flattenPolygons(polygons)
       alert.geometryKind = "zone"
     }
   }
@@ -805,6 +924,7 @@ if (typeof module !== "undefined" && module.exports) {
     compareAlerts: compareAlerts,
     barLabel: barLabel,
     isWarningRank: isWarningRank,
+    leadUrgent: leadUrgent,
     eventClass: eventClass,
     familyOf: familyOf,
     familyOptions: familyOptions,
@@ -813,13 +933,18 @@ if (typeof module !== "undefined" && module.exports) {
     matchesFilter: matchesFilter,
     filterAlerts: filterAlerts,
     shouldNotify: shouldNotify,
+    unexpired: unexpired,
     mergeSeen: mergeSeen,
     parseSeen: parseSeen,
     serializeSeen: serializeSeen,
     extractRings: extractRings,
+    extractPolygons: extractPolygons,
+    flattenPolygons: flattenPolygons,
     boundsFor: boundsFor,
     project: project,
+    unproject: unproject,
     pointInRings: pointInRings,
+    pointInPolygons: pointInPolygons,
     rasterCells: rasterCells,
     mapLayers: mapLayers,
     userAgent: userAgent,

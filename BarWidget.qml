@@ -18,7 +18,14 @@ BarWidget {
   readonly property string tooltip: panelLoader.item ? panelLoader.item.barTooltip : "Acid Alerts"
   readonly property bool warningActive: panelLoader.item ? panelLoader.item.warningActive : false
   readonly property bool hasAlerts: alertCount > 0
-  readonly property var anchorButton: hasAlerts ? alertButton : idleButton
+  readonly property string barMood: panelLoader.item ? panelLoader.item.barMood : "checking"
+  readonly property string idleLabel: panelLoader.item ? panelLoader.item.barText : ""
+  readonly property bool showState: !hasAlerts && idleLabel !== ""
+  readonly property bool hideWhenClear: {
+    var value = root.settings ? root.settings.hideWhenClear : false
+    return value === true || value === 1 || value === "true" || value === "1" || value === "yes"
+  }
+  readonly property var anchorButton: hasAlerts ? alertButton : (showState ? stateButton : idleButton)
 
   function open() {
     if (panelLoader.item) panelLoader.item.open()
@@ -48,13 +55,14 @@ BarWidget {
     panelLoader.item.hostWidget = root
   }
 
-  visible: true
-  implicitWidth: hasAlerts ? alertButton.implicitWidth : idleButton.implicitWidth
-  implicitHeight: hasAlerts ? alertButton.implicitHeight : idleButton.implicitHeight
+  visible: !hideWhenClear || (barMood !== "clear" && barMood !== "checking")
+  implicitWidth: hasAlerts ? alertButton.implicitWidth : (showState ? stateButton.implicitWidth : idleButton.implicitWidth)
+  implicitHeight: hasAlerts ? alertButton.implicitHeight : (showState ? stateButton.implicitHeight : idleButton.implicitHeight)
 
   onBarChanged: injectPanel()
   onSettingsChanged: injectPanel()
   onHasAlertsChanged: injectPanel()
+  onShowStateChanged: injectPanel()
 
   Loader {
     id: panelLoader
@@ -77,7 +85,7 @@ BarWidget {
 
   BarIconButton {
     id: idleButton
-    visible: !root.hasAlerts
+    visible: !root.hasAlerts && !root.showState
     bar: root.bar
     slotSize: Style.bar.statusSlot
     tooltipText: root.tooltip
@@ -86,6 +94,44 @@ BarWidget {
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.MiddleButton) root.refresh()
       else if (buttonCode === Qt.LeftButton) root.toggle()
+    }
+  }
+
+  WidgetButton {
+    id: stateButton
+    visible: root.showState
+    bar: root.bar
+    text: root.vertical ? "" : root.idleLabel
+    tooltipText: root.tooltip
+    active: root.barMood === "unavailable"
+    useActiveColor: root.barMood === "unavailable"
+    labelVisible: !root.vertical
+    hasVisualContent: root.showState
+    horizontalMargin: 8.75
+    verticalPadding: 8.75
+
+    onPressed: function(buttonCode) {
+      if (buttonCode === Qt.MiddleButton) root.refresh()
+      else if (buttonCode === Qt.LeftButton) root.toggle()
+    }
+
+    Column {
+      visible: root.vertical
+      anchors.fill: parent
+
+      Repeater {
+        model: root.idleLabel === "" ? [] : root.idleLabel.split(" ")
+
+        OpticalGlyph {
+          required property string modelData
+          width: stateButton.width
+          height: Style.bar.iconSlot
+          text: modelData
+          fontFamily: stateButton.fontFamily
+          fontSize: modelData.length > 4 ? stateButton.fontSize * 0.9 : stateButton.fontSize
+          color: stateButton.foreground
+        }
+      }
     }
   }
 

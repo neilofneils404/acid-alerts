@@ -41,6 +41,12 @@ Panel {
   property bool zoneRequestExited: false
   property int zoneRequestExitCode: -1
   property bool filtersOpen: false
+  property string selectedId: ""
+  property bool heldExpired: false
+  property bool notifyWhenReady: false
+  property bool seenRetryDone: false
+  property int zoneGeneration: 0
+  property int zoneRequestGeneration: -1
 
   readonly property var barIdentity: hostWidget || root
   readonly property color contentForeground: bar ? bar.foreground : Color.foreground
@@ -55,17 +61,46 @@ Panel {
     : ""
   readonly property int alertCount: alerts.length
   readonly property var selected: alertCount === 0 ? null : alerts[Math.max(0, Math.min(selectedIndex, alertCount - 1))]
-  readonly property string label: Model.barLabel(alerts, !!(bar && bar.vertical))
-  readonly property string barIcon: selected ? selected.icon : (alertCount > 0 ? alerts[0].icon : "")
-  readonly property bool warningActive: selected ? Model.isWarningRank(selected.rank) : false
-  readonly property string barTooltip: root.fetchError !== ""
-    ? "Acid Alerts · " + root.heroMeta()
-    : (selected ? selected.headline : "Acid Alerts · " + root.statusHeading())
+  readonly property string label: {
+    var text = Model.barLabel(alerts, !!(bar && bar.vertical))
+    if (root.demoMode && text !== "" && !(bar && bar.vertical)) return "DEMO · " + text
+    return text
+  }
+  // The bar stays on the most dangerous alert. Selection changes the panel only.
+  readonly property string barIcon: alertCount > 0 && alerts[0] ? alerts[0].icon : ""
+  readonly property bool warningActive: !root.demoMode && alertCount > 0 && Model.leadUrgent(alerts[0])
+  readonly property string barMood: {
+    if (root.demoMode) return "demo"
+    if (!root.located) return "setup"
+    if (root.alertCount > 0) return "alert"
+    if (root.fetchError !== "") return "unavailable"
+    if (root.filteredOut) return "filtered"
+    if (!root.hasSuccessfulFetch) return "checking"
+    return "clear"
+  }
+  readonly property string barText: {
+    if (root.alertCount > 0) return ""
+    if (root.demoMode) return "DEMO"
+    if (!root.located) return "LOCATION"
+    if (root.fetchError !== "") return "NO DATA"
+    if (root.filteredOut) return String(root.incomingAlerts.length) + " HIDDEN"
+    return ""
+  }
+  readonly property string barTooltip: {
+    if (root.demoMode)
+      return "Acid Alerts · DEMO · " + (root.demoScene ? root.demoScene.title : "sample alerts")
+    if (root.alertCount > 0 && root.fetchError === "") {
+      var lead = root.alerts[0]
+      var extra = root.alertCount > 1 ? " · " + root.alertCount + " alerts in this area" : ""
+      return "Acid Alerts · " + (lead ? lead.headline : "") + extra
+    }
+    return "Acid Alerts · " + root.heroMeta()
+  }
   readonly property var mapLayers: Model.mapLayers(alerts, selected ? selected.id : "")
   readonly property int refreshMs: Math.max(30000, (parseInt(setting("refreshSeconds", 60), 10) || 60) * 1000)
   readonly property bool demoMode: Demo.demoEnabled(root.settings)
   readonly property var filter: Model.parseFilter(root.settings)
-  readonly property bool filteredOut: !demoMode && incomingAlerts.length > 0 && alertCount === 0
+  readonly property bool filteredOut: !demoMode && !heldExpired && incomingAlerts.length > 0 && alertCount === 0
   readonly property var familyChoices: Model.familyOptions()
   readonly property bool filtersVisible: alertCount === 0 || filtersOpen
   readonly property int mapPixels: {
@@ -141,12 +176,17 @@ Panel {
   // Invalidate results when switching locations or entering/leaving demo mode.
   function resetSource() {
     root.fetchGeneration += 1
+    root.zoneGeneration += 1
+    root.zoneQueue = []
     root.hasSuccessfulFetch = false
     root.lastUpdated = ""
     root.fetchError = ""
+    root.heldExpired = false
     root.incomingAlerts = []
     root.alerts = []
+    root.selectedId = ""
     root.firstLoad = true
+    root.notifyWhenReady = false
     root.refresh()
   }
 
@@ -163,6 +203,7 @@ Panel {
     }
     if (root.requestExitCode !== 0) {
       root.fetchError = "NWS is unreachable"
+      root.applyVisible()
       return
     }
     root.applyPayload(body)
@@ -199,25 +240,75 @@ Panel {
     var parsed = Model.parseCollection(raw)
     if (parsed.error && parsed.alerts.length === 0) {
       root.fetchError = parsed.error
+      root.applyVisible()
       return
     }
     root.fetchError = ""
+    root.heldExpired = false
     Model.attachZoneRings(parsed.alerts, root.zoneCache)
     root.incomingAlerts = parsed.alerts
     root.applyVisible()
     root.hasSuccessfulFetch = true
     root.lastUpdated = Qt.formatDateTime(new Date(), "MMM d h:mm AP")
+    if (root.seenHydrated) {
+      notifyNewAlerts(root.alerts)
+      root.firstLoad = false
+      persistSeen(parsed.alerts)
+      root.notifyWhenReady = false
+    } else {
+      root.notifyWhenReady = true
+    }
+    root.enqueueZones(parsed.alerts)
+  }
+
+  // A fetch can finish before the seen-file loads. Hold the notice until then
+  // so a warning is not marked seen without ever notifying.
+  function releasePendingNotice() {
+    if (!root.seenHydrated || !root.notifyWhenReady) return
+    root.notifyWhenReady = false
     notifyNewAlerts(root.alerts)
     root.firstLoad = false
-    persistSeen(parsed.alerts)
-    root.enqueueZones(parsed.alerts)
+    persistSeen(root.incomingAlerts)
+  }
+
+  // A later reload must not forget alerts this session already recorded.
+  function rememberSeen(raw) {
+    var loaded = Model.parseSeen(raw)
+    if (root.seen) {
+      for (var key in root.seen) {
+        if (loaded[key] === undefined || Number(root.seen[key]) > Number(loaded[key]))
+          loaded[key] = root.seen[key]
+      }
+    }
+    root.seen = loaded
+    root.seenHydrated = true
+    root.releasePendingNotice()
   }
 
   function applyVisible() {
     var source = root.incomingAlerts || []
+    if (root.fetchError !== "" && !root.demoMode) {
+      var live = Model.unexpired(source, Date.now())
+      root.heldExpired = live.length === 0 && source.length > 0
+      source = live
+    } else {
+      root.heldExpired = false
+    }
     var next = root.demoMode ? source : Model.filterAlerts(source, root.filter)
+    var keep = 0
+    if (root.selectedId !== "") {
+      for (var i = 0; i < next.length; i++) {
+        if (next[i] && next[i].id === root.selectedId) {
+          keep = i
+          break
+        }
+      }
+    }
+    if (next.length === 0) keep = 0
+    else if (!next[keep] || next[keep].id !== root.selectedId) keep = 0
     root.alerts = next
-    if (root.selectedIndex >= next.length) root.selectedIndex = 0
+    root.selectedIndex = keep
+    if (next.length > 0) root.selectedId = next[keep].id
   }
 
   function enqueueZones(nextAlerts) {
@@ -238,6 +329,7 @@ Panel {
     var url = root.zoneQueue[0]
     root.zoneQueue = root.zoneQueue.slice(1)
     root.zoneFetchUrl = url
+    root.zoneRequestGeneration = root.zoneGeneration
     root.zoneResponseBody = ""
     root.zoneResponseReady = false
     root.zoneRequestExited = false
@@ -259,6 +351,10 @@ Panel {
     root.zoneFetchInFlight = false
     var body = root.zoneResponseBody
     root.zoneResponseBody = ""
+    if (root.zoneRequestGeneration !== root.zoneGeneration) {
+      Qt.callLater(root.pumpZones)
+      return
+    }
     if (root.zoneRequestExitCode === 0 && !root.demoMode)
       root.applyZonePayload(body)
     Qt.callLater(root.pumpZones)
@@ -354,6 +450,7 @@ Panel {
     if (next < 0) next = 0
     if (next > root.alertCount - 1) next = root.alertCount - 1
     root.selectedIndex = next
+    if (root.alerts[next]) root.selectedId = root.alerts[next].id
   }
 
   function formatWhen(iso) {
@@ -362,6 +459,26 @@ Panel {
     if (isNaN(date.getTime())) return ""
     var sameDay = date.toDateString() === (new Date()).toDateString()
     return Qt.formatDateTime(date, sameDay ? "h:mm AP" : "MMM d h:mm AP")
+  }
+
+  // `ends` is when the hazard is expected to end. `expires` is when this
+  // message must be replaced. They are often different times.
+  function whenLine(alert) {
+    if (!alert) return ""
+    var ends = root.formatWhen(alert.ends)
+    var expires = root.formatWhen(alert.expires)
+    if (ends !== "" && expires !== "" && ends !== expires)
+      return "ends " + ends + " · message expires " + expires
+    if (ends !== "") return "ends " + ends
+    if (expires !== "") return "message expires " + expires
+    return ""
+  }
+
+  function responseLabel() {
+    if (!root.selected) return ""
+    var response = String(root.selected.response || "")
+    if (response === "" || response === "None" || response === "Unknown") return ""
+    return response.toUpperCase()
   }
 
   function statusHeading() {
@@ -378,17 +495,28 @@ Panel {
     if (root.demoMode && root.demoScene)
       return "DEMO · " + root.demoScene.title
     if (!root.located) return "Set a weather location to watch this place."
-    if (root.fetchError !== "")
-      return root.fetchError + (root.hasSuccessfulFetch
-        ? " · showing last known data; current conditions unknown"
-        : " · current conditions unknown")
+    if (root.fetchError !== "") {
+      if (root.heldExpired)
+        return root.fetchError + " · previous alerts have expired; current conditions unknown"
+      if (root.hasSuccessfulFetch && root.alertCount > 0)
+        return root.fetchError + " · showing last known data; current conditions unknown"
+      return root.fetchError + " · current conditions unknown"
+    }
     if (!root.hasSuccessfulFetch) return "Waiting for NWS data for " + locationLabel()
     if (root.fetchInFlight) return "Checking NWS for " + locationLabel()
     if (root.filteredOut) return root.incomingAlerts.length + " in " + locationLabel() + ", hidden by filters"
     if (root.alertCount === 0) return "No alerts match your filters in " + locationLabel()
-    var until = root.selected ? formatWhen(root.selected.expires) : ""
-    if (until !== "") return root.selected.severity.toUpperCase() + " · until " + until
-    return root.selected ? root.selected.severity.toUpperCase() : ""
+    var bits = []
+    if (root.alertCount > 1)
+      bits.push(String(root.alertCount - 1) + (root.alertCount === 2 ? " other alert" : " other alerts"))
+    if (root.selected) {
+      bits.push(root.selected.severity.toUpperCase())
+      if (root.selected.certainty && root.selected.certainty !== "Unknown")
+        bits.push(root.selected.certainty.toUpperCase())
+      var when = root.whenLine(root.selected)
+      if (when !== "") bits.push(when)
+    }
+    return bits.join(" · ")
   }
 
   function footerText() {
@@ -408,9 +536,10 @@ Panel {
     return "your area"
   }
 
-  function severityColor(rank) {
-    if (rank >= 3) return root.contentUrgent
-    if (rank >= 2) return root.contentAccent
+  function severityColor(alert) {
+    if (!alert) return root.dim
+    if (Model.eventClass(alert.event) === "warning" || alert.rank >= 3) return root.contentUrgent
+    if (Model.eventClass(alert.event) === "watch" || alert.rank >= 2) return root.contentAccent
     return root.dim
   }
 
@@ -444,13 +573,12 @@ Panel {
     path: Quickshell.env("HOME") + "/.local/state/omarchy/acid-alerts.json"
     watchChanges: false
     printErrors: false
-    onLoaded: {
-      root.seen = Model.parseSeen(text())
-      root.seenHydrated = true
-    }
+    onLoaded: root.rememberSeen(text())
     onLoadFailed: {
+      if (root.seenHydrated || !root.seenRetryDone) return
       root.seen = {}
       root.seenHydrated = true
+      root.releasePendingNotice()
     }
   }
 
@@ -460,8 +588,12 @@ Panel {
     repeat: false
     onTriggered: {
       locationFile.reload()
-      seenFile.reload()
       zonesFile.reload()
+      // The state file is often unreadable for a moment at startup. Give up
+      // only after this retry, so an early failure cannot notify as if the
+      // seen-file were empty.
+      root.seenRetryDone = true
+      if (!root.seenHydrated) seenFile.reload()
     }
   }
 
@@ -506,7 +638,12 @@ Panel {
     }
   }
 
-  Component.onCompleted: Qt.callLater(root.refresh)
+  Component.onCompleted: {
+    locationFile.reload()
+    seenFile.reload()
+    zonesFile.reload()
+    Qt.callLater(root.refresh)
+  }
 
   KeyboardPanel {
     id: panel
@@ -603,6 +740,7 @@ Panel {
             width: parent.width
             mapHeight: root.mapPixels
             layers: root.mapLayers
+            focusRings: root.selected && root.selected.rings ? root.selected.rings : []
             userLat: Number(root.location.latitude)
             userLon: Number(root.location.longitude)
             ink: root.contentForeground
@@ -614,7 +752,12 @@ Panel {
           Text {
             width: parent.width
             visible: root.selected !== null
-            text: root.selected ? Model.footprintCaption(root.selected.geometryKind) : ""
+            text: {
+              var caption = root.selected ? Model.footprintCaption(root.selected.geometryKind) : ""
+              if (root.alertCount > 1)
+                caption = (caption !== "" ? caption + " · " : "") + "map follows the selected alert"
+              return caption
+            }
             color: root.dim
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -640,13 +783,16 @@ Panel {
               Rectangle {
                 width: Style.space(3)
                 height: parent.height
-                color: root.severityColor(modelData.rank)
+                color: root.severityColor(modelData)
               }
 
               MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.selectedIndex = index
+                onClicked: {
+                  root.selectedIndex = index
+                  root.selectedId = modelData.id
+                }
               }
 
               Column {
@@ -663,7 +809,7 @@ Panel {
 
                   Text {
                     text: modelData.icon || ""
-                    color: root.severityColor(modelData.rank)
+                    color: root.severityColor(modelData)
                     font.family: root.contentFontFamily
                     font.pixelSize: Style.font.title
                     textFormat: Text.PlainText
@@ -696,14 +842,36 @@ Panel {
 
           Text {
             width: parent.width
+            visible: root.responseLabel() !== ""
+            text: root.responseLabel()
+            color: root.severityColor(root.selected)
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.body
+            font.bold: true
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+          }
+
+          Text {
+            width: parent.width
+            visible: root.selected && root.selected.sender !== ""
+            text: root.selected ? root.selected.sender : ""
+            color: root.dim
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+          }
+
+          Text {
+            width: parent.width
             visible: root.selected && root.selected.instruction !== ""
             text: root.selected ? root.selected.instruction : ""
             color: root.contentForeground
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.bodySmall
             wrapMode: Text.WordWrap
-            maximumLineCount: 5
-            elide: Text.ElideRight
             textFormat: Text.PlainText
           }
 
@@ -750,7 +918,7 @@ Panel {
             Toggle {
               width: parent.width
               label: "Warnings"
-              description: "Default on. Tornado, flood, winter, and other warnings."
+              description: "Default on. Includes warning follow-up statements."
               checked: Model.parseBoolSetting(setting("showWarnings", true), true)
               foreground: root.contentForeground
               fontFamily: root.contentFontFamily
@@ -837,6 +1005,17 @@ Panel {
                 }
               }
             }
+          }
+
+          Text {
+            width: parent.width
+            visible: root.selected && root.selected.description !== ""
+            text: root.selected ? root.selected.description : ""
+            color: root.contentForeground
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
           }
 
           Text {

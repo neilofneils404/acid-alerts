@@ -39,6 +39,7 @@ function panel() {
   context.persistSeen = () => {}
   root.enqueueZones = () => {}
   root.refresh = () => { root.refreshCalls++ }
+  root._vm = context
   return root
 }
 
@@ -74,14 +75,18 @@ p.applyPayload(empty)
 assert.equal(p.statusHeading(), 'NO MATCHING ALERTS')
 assert.equal(p.fetchError, '')
 
-// Preserve cached alerts and timestamps across network and parsing failures.
+// A failed check keeps the last payload, and drops it from the bar once the
+// message itself has expired. The fixture's expires time is already past.
 p.applyPayload(fixture)
+assert.equal(p.statusHeading(), 'FLOOD ADVISORY')
 const cached = p.incomingAlerts
 for (const raw of ['', '{}', '{']) {
   p.applyPayload(raw)
   assert.equal(p.incomingAlerts, cached)
-  assert.equal(p.statusHeading(), 'FLOOD ADVISORY')
-  assert.match(p.heroMeta(), /showing last known data/)
+  assert.equal(p.alertCount, 0)
+  assert.equal(p.heldExpired, true)
+  assert.equal(p.statusHeading(), 'ALERTS UNAVAILABLE')
+  assert.match(p.heroMeta(), /previous alerts have expired/)
 }
 p.fetchInFlight = true
 p.requestExited = true
@@ -145,6 +150,60 @@ filtered.applyPayload(fixture)
 assert.equal(filtered.incomingAlerts.length, 1)
 assert.equal(filtered.alertCount, 0)
 assert.equal(filtered.statusHeading(), 'NO MATCHING ALERTS')
+
+// Several alerts stay in the list. The selection survives a refresh, and the
+// map copy names the other alerts. The bar label stays on the highest one.
+const stack = panel()
+stack.filter = Model.parseFilter({ showWarnings: true, showWatches: true, showAdvisories: true })
+stack.applyPayload(JSON.stringify({
+  type: 'FeatureCollection',
+  features: [
+    { type: 'Feature', properties: { id: 'flood', event: 'Flood Warning', severity: 'Severe', urgency: 'Expected', expires: '2099-01-01T00:00:00Z', ends: '2099-01-02T00:00:00Z' } },
+    { type: 'Feature', properties: { id: 'tor', event: 'Tornado Warning', severity: 'Extreme', urgency: 'Immediate', expires: '2099-01-01T01:00:00Z' } },
+  ],
+}))
+assert.equal(stack.alerts[0].id, 'tor')
+assert.equal(stack.alertCount, 2)
+assert.equal(Model.barLabel(stack.alerts, false), '2 · TORNADO')
+stack.selectedIndex = 1
+stack.selectedId = 'flood'
+stack.applyVisible()
+assert.equal(stack.selected.id, 'flood')
+assert.match(stack.heroMeta(), /other alert/)
+stack.fetchError = 'NWS is unreachable'
+stack.applyVisible()
+assert.equal(stack.alertCount, 2)
+assert.equal(stack.selected.id, 'flood')
+assert.match(stack.heroMeta(), /showing last known data/)
+
+// Notices wait until the seen-file has loaded, then fire once.
+const notice = panel()
+let notices = 0
+notice._vm.notifyNewAlerts = () => { notices++ }
+notice.seenHydrated = false
+notice.applyPayload(JSON.stringify({
+  type: 'FeatureCollection',
+  features: [
+    { type: 'Feature', properties: { id: 'now', event: 'Tornado Warning', severity: 'Extreme', urgency: 'Immediate', expires: '2099-01-01T00:00:00Z' } },
+  ],
+}))
+assert.equal(notices, 0)
+assert.equal(notice.notifyWhenReady, true)
+assert.equal(notice.firstLoad, true)
+notice.seenHydrated = true
+notice.releasePendingNotice()
+assert.equal(notices, 1)
+assert.equal(notice.firstLoad, false)
+notice.releasePendingNotice()
+assert.equal(notices, 1)
+
+const memory = panel()
+memory.seen = { kept: 50, newer: 80 }
+memory.seenHydrated = true
+memory.rememberSeen(JSON.stringify({ seen: { fromFile: 9, newer: 10 } }))
+assert.equal(memory.seen.kept, 50)
+assert.equal(memory.seen.newer, 80)
+assert.equal(memory.seen.fromFile, 9)
 console.log('panel state regression tests: ok')
 
 // Failed/oversized/truncated transfers must never reach either parser, even

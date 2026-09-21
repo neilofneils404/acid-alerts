@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "neil.acid-alerts",
   "name": "Acid Alerts",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Neil",
   "license": "MIT",
   "description": "National Weather Service alerts for your Omarchy weather location. Warnings on by default; watches and advisories are opt-in.",

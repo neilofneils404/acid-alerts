@@ -1,0 +1,19 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Model, panel state, and transfer limits
+        run: |
+          node tests/test-model.js
+          node tests/test-panel-state.js
+          node tests/test-response-limits.js

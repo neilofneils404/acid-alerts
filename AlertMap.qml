@@ -8,6 +8,9 @@ Item {
   id: root
 
   property var layers: []
+  // Rings that set the frame. Pass the selected alert so a small storm
+  // polygon stays readable inside a county-wide watch.
+  property var focusRings: []
   property real userLat: NaN
   property real userLon: NaN
   property color ink: Color.foreground
@@ -19,13 +22,15 @@ Item {
 
   readonly property bool hasFootprint: root.layers && root.layers.length > 0
   readonly property var allRings: collectRings()
-  readonly property var bounds: Model.boundsFor(allRings, userLat, userLon, 0.2)
+  readonly property var frameRings: focusRings && focusRings.length > 0 ? focusRings : allRings
+  readonly property var bounds: Model.boundsFor(frameRings, userLat, userLon, 0.2)
 
   implicitHeight: hasFootprint ? mapHeight : 0
   visible: hasFootprint && bounds !== null
   clip: true
 
   onLayersChanged: canvas.requestPaint()
+  onFocusRingsChanged: canvas.requestPaint()
   onUserLatChanged: canvas.requestPaint()
   onUserLonChanged: canvas.requestPaint()
   onInkChanged: canvas.requestPaint()
@@ -90,7 +95,7 @@ Item {
       var list = root.layers || []
       for (var i = 0; i < list.length; i++) {
         var layer = list[i]
-        var cells = Model.rasterCells(layer.rings, root.bounds, columns, rows)
+        var cells = Model.rasterCells(layer.polygons || [], root.bounds, columns, rows)
         var color = root.fillColor(layer)
         var alpha = layer.selected ? 0.55 : 0.22
         ctx.fillStyle = Qt.rgba(color.r, color.g, color.b, alpha)

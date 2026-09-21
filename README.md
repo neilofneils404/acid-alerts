@@ -17,7 +17,7 @@ Acid Alerts brings [National Weather Service](https://www.weather.gov/) alerts t
 
 - **Local by default.** Uses your Omarchy weather location, with an optional location override.
 - **Warnings first.** Warnings are enabled out of the box. Add watches, advisories, or specific weather families to suit your needs.
-- **See the affected area.** Displays NWS storm polygons or county / zone outlines, depending on the alert.
+- **See the affected area.** Displays NWS storm polygons or county / zone outlines, including alerts that cover more than one polygon. When several alerts overlap, the map frames the one you select and the others stay in the list.
 - **At home on your desktop.** Follows your Omarchy theme, with keyboard controls and desktop notifications for newly detected qualifying alerts.
 
 For locations covered by NWS in the **United States and its territories**. This is an alert viewer, not a forecast or radar app.
@@ -44,7 +44,7 @@ Acid Alerts uses the location set by `omarchy-weather-location`. Open the diamon
 
 View full-size panels: [Tornado warning](docs/media/tornado.png) · [Ice storm warning](docs/media/ice-storm.png) · [Winter storm watch](docs/media/winter-watch.png)
 
-In live mode, the plugin requests active NWS alerts for your location and applies your filters. Storm-based products can show the polygon issued by the forecast office; county- and zone-based products use NWS boundary outlines. Filters collapse while an alert is open to leave more room for the alert itself.
+In live mode, the plugin requests active NWS alerts for your location and applies your filters. Storm-based products can show the polygon issued by the forecast office; county- and zone-based products use NWS boundary outlines. If more than one alert is active, the bar names the most dangerous one and shows the count. Open the panel to move through the rest. The map frames the selected alert, so a storm polygon stays readable when a watch covers the whole county. Filters collapse while an alert is open to leave more room for the instruction and the full NWS description.
 
 <details>
 <summary>Explore the demo gallery</summary>
@@ -71,13 +71,14 @@ Change alert filters in the panel, or edit the Acid Alerts widget entry in `~/.c
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `showWarnings` | `true` | Show warning products. |
+| `showWarnings` | `true` | Show warning products, including flash flood, flood, and severe weather statements that follow a warning. |
 | `showWatches` | `false` | Include watches. |
-| `showAdvisories` | `false` | Include advisories, statements, and similar products. |
+| `showAdvisories` | `false` | Include advisories and other lower-tier products. |
 | `families` | `[]` | Include all weather families, or limit to the selected families below. |
 | `refreshSeconds` | `60` | Seconds between checks; minimum `30`. |
 | `latitude` / `longitude` / `name` | Omarchy weather location | Override the plugin location without changing your weather settings. |
-| `demo` | `false` | Show sample alerts instead of live data. |
+| `hideWhenClear` | `false` | Hide the bar mark after a successful check with nothing to show. Unavailable data, hidden alerts, and demo mode stay visible. |
+| `demo` | `false` | Show sample alerts instead of live data. The bar labels these `DEMO`. |
 
 Available families: `tornado`, `thunderstorm`, `flashflood`, `flood`, `winter`, `wind`, `cold`, `heat`, `fire`, `tropical`, `fog`, `other`.
 
@@ -104,7 +105,9 @@ omarchy plugin remove neil.acid-alerts
 
 Acid Alerts is an independent desktop plugin that displays official NWS data in live mode. It is not an official NWS product, and it cannot guarantee delivery of every alert. Network outages, a sleeping computer, filters, and polling delays can prevent or delay an alert. Previously unseen severe or extreme alerts can notify on the first load; lower-severity alerts have additional notification restrictions.
 
-The panel shows **ALERTS UNAVAILABLE** when a check fails without any cached alerts. Previously loaded alerts remain visible with a last-known-data notice and the last successful check time. **NO MATCHING ALERTS** means a successful check found nothing matching your filters.
+The panel shows **ALERTS UNAVAILABLE** when a check fails and there is nothing current to show. The bar reads **NO DATA** in that case, rather than the idle diamond. Previously loaded alerts remain visible, with a last-known-data notice, until each message's expiration time. After that they leave the bar, and the panel says the previous alerts have expired. **NO MATCHING ALERTS** means a successful check found nothing matching your filters. If alerts are in but hidden, the bar shows the hidden count, such as **2 HIDDEN**, instead of looking clear.
+
+Test, exercise, and cancelled products are ignored. A new Severe or Extreme alert can notify after the first check. On that first check, only an immediate warning notifies, so a heat or winter warning that is already in effect does not page you the moment the plugin loads.
 
 **An empty panel is not a guarantee of safe weather.** Keep Wireless Emergency Alerts enabled, have access to NOAA Weather Radio, and follow instructions from your local weather office and emergency officials.
 

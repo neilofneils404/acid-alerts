@@ -17,7 +17,7 @@ function demoEnabled(settings) {
 
 function scenes(atlas) {
   var cuyahogaCounty = geomFromAtlas(atlas, ["OHC035"], "zone")
-  var watchCounties = cuyahogaCounty
+  var watchCounties = geomFromAtlas(atlas, ["OHC035", "OHC093"], "zone") || cuyahogaCounty
   return [
     scene("tornado-warning", "Tornado Warning", [
       alert("Tornado Warning", "Extreme", "Immediate", "Observed",

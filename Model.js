@@ -31,6 +31,11 @@ var SHORT_EVENT = {
   "Coastal Flood Warning": "COASTAL FLD",
   "Coastal Flood Watch": "CSTL WATCH",
   "Coastal Flood Advisory": "CSTL ADV",
+  "Coastal Flood Statement": "CSTL STMT",
+  "Lakeshore Flood Warning": "LKSHR FLOOD",
+  "Lakeshore Flood Watch": "LKSHR WATCH",
+  "Lakeshore Flood Advisory": "LKSHR ADV",
+  "Lakeshore Flood Statement": "LKSHR STMT",
   "Storm Surge Warning": "SURGE",
   "Storm Surge Watch": "SURGE WATCH",
   "Hurricane Warning": "HURRICANE",
@@ -38,6 +43,10 @@ var SHORT_EVENT = {
   "Tropical Storm Warning": "TROP STORM",
   "Tropical Storm Watch": "TROP WATCH",
   "Extreme Wind Warning": "EXT WIND",
+  "Hurricane Force Wind Warning": "HF WIND",
+  "Hurricane Force Wind Watch": "HF WIND WATCH",
+  "Heavy Freezing Spray Warning": "HVY FZ SPRAY",
+  "Heavy Freezing Spray Watch": "FZ SPRAY WATCH",
   "High Wind Warning": "HIGH WIND",
   "High Wind Watch": "WIND WATCH",
   "Wind Advisory": "WIND",
@@ -48,7 +57,7 @@ var SHORT_EVENT = {
   "Dense Smoke Advisory": "SMOKE",
   "Fire Weather Watch": "FIRE WATCH",
   "Avalanche Warning": "AVALANCHE",
-  "Avalanche Watch": "AVALANCHE",
+  "Avalanche Watch": "AVAL WATCH",
   "Special Weather Statement": "SPS",
   "Hydrologic Outlook": "HYDRO",
   "Flood Statement": "FLOOD",
@@ -66,6 +75,7 @@ var SHORT_EVENT = {
   "Wind Chill Warning": "WIND CHILL",
   "Wind Chill Watch": "CHILL WATCH",
   "Wind Chill Advisory": "CHILL ADV",
+  "Cold Weather Advisory": "COLD ADV",
   "Extreme Cold Warning": "EXT COLD",
   "Extreme Cold Watch": "COLD WATCH",
   "Freeze Warning": "FREEZE",
@@ -74,12 +84,19 @@ var SHORT_EVENT = {
   "Excessive Heat Warning": "HEAT",
   "Excessive Heat Watch": "HEAT WATCH",
   "Extreme Heat Warning": "HEAT",
+  "Extreme Heat Watch": "HEAT WATCH",
   "Heat Advisory": "HEAT ADV",
   "Red Flag Warning": "RED FLAG",
+  "Extreme Fire Danger": "FIRE DANGER",
   "Special Marine Warning": "MARINE",
   "Gale Warning": "GALE",
   "Tsunami Warning": "TSUNAMI",
-  "Air Quality Alert": "AIR QUALITY"
+  "Air Quality Alert": "AIR QUALITY",
+  "Child Abduction Emergency": "CHILD ABDUCT",
+  "Civil Emergency Message": "CIVIL EMERG",
+  "Local Area Emergency": "LOCAL EMERG",
+  "Nuclear Power Plant Warning": "NUCLEAR PLANT",
+  "Short Term Forecast": "SHORT TERM"
 }
 
 var EVENT_ICON = {
@@ -390,13 +407,59 @@ function urgencyRank(urgency) {
   return URGENCY_RANK.hasOwnProperty(urgency) ? URGENCY_RANK[urgency] : 0
 }
 
+// Bar labels for events missing from SHORT_EVENT. Warnings read bare; a
+// watch always says so, and advisories and statements say so when they fit.
+var CLASS_TAG = { warning: "", watch: "WATCH", advisory: "ADV", statement: "STMT" }
+
+var WORD_ABBR = {
+  ABDUCTION: "ABDUCT", ADMINISTRATIVE: "ADMIN", AVALANCHE: "AVAL", COASTAL: "CSTL",
+  CYCLONE: "CYC", EMERGENCY: "EMERG", ENFORCEMENT: "ENF", EVACUATION: "EVAC",
+  EXTREME: "EXT", FLOOD: "FLD", FORECAST: "FCST", FREEZING: "FRZ", HAZARDOUS: "HAZ",
+  HURRICANE: "HURR", IMMEDIATE: "NOW", LAKESHORE: "LKSHR", MATERIALS: "MAT",
+  MESSAGE: "MSG", NUCLEAR: "NUC", OUTAGE: "OUT", RADIOLOGICAL: "RAD", SHELTER: "SHLTR",
+  STAGNATION: "STAG", TELEPHONE: "PHONE", THUNDERSTORM: "TSTM", TROPICAL: "TROP",
+  WEATHER: "WX"
+}
+
+var SHORT_LIMIT = 14
+
 function shortEvent(event) {
   if (SHORT_EVENT[event]) return SHORT_EVENT[event]
-  var text = String(event || "")
-  text = text.replace(/\s+(Warning|Watch|Advisory|Statement)$/i, "")
-  text = text.replace(/^\s+|\s+$/g, "")
-  if (text.length > 14) text = text.slice(0, 13)
-  return text === "" ? "ALERT" : text.toUpperCase()
+  var text = String(event || "").replace(/^\s+|\s+$/g, "")
+  var match = text.match(/^(.*?)\s+(Warning|Watch|Advisory|Statement)$/i)
+  var base = match ? match[1] : text
+  var tag = match ? CLASS_TAG[match[2].toLowerCase()] : ""
+  var words = base.toUpperCase().split(/\s+/).filter(function(word) { return word !== "" })
+  if (words.length === 0) return "ALERT"
+  var label = fitLabel(words, tag)
+  if (label === "" && tag !== "WATCH") label = fitLabel(words, "")
+  if (label === "") {
+    // Last resort: cut at a word boundary rather than mid-word.
+    var raw = words.join(" ")
+    var cut = raw.slice(0, SHORT_LIMIT + 1).lastIndexOf(" ")
+    label = cut > 0 ? raw.slice(0, cut) : raw.slice(0, SHORT_LIMIT)
+  }
+  return label
+}
+
+// Shorten the longest words first, then drop trailing words. A watch keeps
+// its tag; other tags are dropped by the caller when nothing fits.
+function fitLabel(words, tag) {
+  var list = words.slice()
+  function joined() { return list.concat(tag ? [tag] : []).join(" ") }
+  while (joined().length > SHORT_LIMIT) {
+    var longest = -1
+    for (var i = 0; i < list.length; i++) {
+      if (!WORD_ABBR[list[i]]) continue
+      if (longest === -1 || list[i].length > list[longest].length) longest = i
+    }
+    if (longest === -1) break
+    list[longest] = WORD_ABBR[list[longest]]
+  }
+  if (joined().length <= SHORT_LIMIT) return joined()
+  if (tag !== "WATCH") return ""
+  while (list.length > 1 && joined().length > SHORT_LIMIT) list.pop()
+  return joined().length <= SHORT_LIMIT ? joined() : ""
 }
 
 function compareAlerts(a, b) {

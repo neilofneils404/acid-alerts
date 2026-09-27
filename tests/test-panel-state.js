@@ -171,6 +171,11 @@ stack.selectedId = 'flood'
 stack.applyVisible()
 assert.equal(stack.selected.id, 'flood')
 assert.match(stack.heroMeta(), /other alert/)
+// A routine refresh keeps the selected alert's details on screen.
+stack.fetchInFlight = true
+assert.match(stack.heroMeta(), /other alert/)
+assert.doesNotMatch(stack.heroMeta(), /Checking NWS/)
+stack.fetchInFlight = false
 stack.fetchError = 'NWS is unreachable'
 stack.applyVisible()
 assert.equal(stack.alertCount, 2)

@@ -445,9 +445,12 @@ Item {
       return root.fetchError + " · current conditions unknown"
     }
     if (!root.hasSuccessfulFetch) return "Waiting for NWS data for " + locationLabel()
-    if (root.fetchInFlight) return "Checking NWS for " + locationLabel()
+    // A routine refresh must not replace what the panel already knows.
     if (root.filteredOut) return root.incomingAlerts.length + " in " + locationLabel() + ", hidden by filters"
-    if (root.alertCount === 0) return "No alerts match your filters in " + locationLabel()
+    if (root.alertCount === 0) {
+      if (root.fetchInFlight) return "Checking NWS for " + locationLabel()
+      return "No alerts match your filters in " + locationLabel()
+    }
     var bits = []
     if (root.alertCount > 1)
       bits.push(String(root.alertCount - 1) + (root.alertCount === 2 ? " other alert" : " other alerts"))

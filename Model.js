@@ -240,6 +240,22 @@ function responseTooLarge(text) {
   return false
 }
 
+// With --fail-with-body, an HTTP error still hands over the NWS problem
+// document. Only a point outside NWS coverage is told apart; anything else
+// stays a generic failure.
+function outsideCoverage(raw) {
+  var text = String(raw || "")
+  if (text === "" || responseTooLarge(text)) return false
+  try {
+    var data = JSON.parse(text)
+    return !!(data && typeof data === "object"
+      && Number(data.status) === 400
+      && /out of bounds/i.test(String(data.detail || "")))
+  } catch (e) {
+    return false
+  }
+}
+
 function parseCollection(raw) {
   var empty = { alerts: [], error: "" }
   var text = String(raw || "")
@@ -1043,6 +1059,7 @@ if (typeof module !== "undefined" && module.exports) {
     responseByteLimit: responseByteLimit,
     responseTooLarge: responseTooLarge,
     parseCollection: parseCollection,
+    outsideCoverage: outsideCoverage,
     normalizeAlert: normalizeAlert,
     shortEvent: shortEvent,
     compareAlerts: compareAlerts,

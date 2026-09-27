@@ -20,7 +20,7 @@ Acid Alerts brings [National Weather Service](https://www.weather.gov/) alerts t
 - **See the affected area.** Displays NWS storm polygons or county / zone outlines, including alerts that cover more than one polygon. When several alerts overlap, the map frames the one you select and the others stay in the list.
 - **At home on your desktop.** Follows your Omarchy theme, with keyboard controls and desktop notifications for newly detected qualifying alerts.
 
-For locations covered by NWS in the **United States and its territories**. This is an alert viewer, not a forecast or radar app.
+For locations covered by NWS in the **United States and its territories**. Elsewhere, the panel reads **OUTSIDE NWS COVERAGE** and stops checking until the location changes. This is an alert viewer, not a forecast or radar app.
 
 > **Keep more than one way to receive warnings.** Acid Alerts depends on your desktop, internet connection, and periodic NWS checks. Use it alongside Wireless Emergency Alerts, NOAA Weather Radio, and local emergency guidance.
 

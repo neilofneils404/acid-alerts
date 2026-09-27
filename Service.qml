@@ -47,6 +47,9 @@ Item {
   property int zoneRequestExitCode: -1
   property string selectedId: ""
   property bool heldExpired: false
+  // NWS rejected the point as outside its coverage. Retrying cannot help
+  // until the location changes, so the timer stops asking.
+  property bool outsideCoverage: false
   property bool notifyWhenReady: false
   property bool seenRetryDone: false
   property int zoneGeneration: 0
@@ -66,7 +69,7 @@ Item {
   readonly property bool warningActive: !root.demoMode && alertCount > 0 && Model.leadUrgent(alerts[0])
   readonly property string barMood: {
     if (root.demoMode) return "demo"
-    if (!root.located) return "setup"
+    if (!root.located || root.outsideCoverage) return "setup"
     if (root.alertCount > 0) return "alert"
     if (root.fetchError !== "") return "unavailable"
     if (root.filteredOut) return "filtered"
@@ -76,7 +79,7 @@ Item {
   readonly property string barText: {
     if (root.alertCount > 0) return ""
     if (root.demoMode) return "DEMO"
-    if (!root.located) return "LOCATION"
+    if (!root.located || root.outsideCoverage) return "LOCATION"
     if (root.fetchError !== "") return "NO DATA"
     if (root.filteredOut) return String(root.incomingAlerts.length) + " HIDDEN"
     return ""
@@ -135,7 +138,7 @@ Item {
     root.requestExited = false
     root.requestExitCode = -1
     fetchProc.command = [
-      "curl", "-q", "-fsS", "--max-time", "10",
+      "curl", "-q", "-sS", "--fail-with-body", "--max-time", "10",
       "--max-filesize", String(Model.responseByteLimit()),
       "-A", Model.userAgent(),
       "-H", "Accept: application/geo+json",
@@ -154,6 +157,7 @@ Item {
     root.lastUpdated = ""
     root.fetchError = ""
     root.heldExpired = false
+    root.outsideCoverage = false
     root.incomingAlerts = []
     root.alerts = []
     root.selectedId = ""
@@ -174,10 +178,12 @@ Item {
       return
     }
     if (root.requestExitCode !== 0) {
-      root.fetchError = "NWS is unreachable"
+      root.outsideCoverage = root.requestExitCode === 22 && Model.outsideCoverage(body)
+      root.fetchError = root.outsideCoverage ? "Outside NWS coverage" : "NWS is unreachable"
       root.applyVisible()
       return
     }
+    root.outsideCoverage = false
     root.applyPayload(body)
   }
 
@@ -416,6 +422,7 @@ Item {
 
   function statusHeading() {
     if (!root.demoMode && !root.located) return "SET A LOCATION"
+    if (!root.demoMode && root.outsideCoverage) return "OUTSIDE NWS COVERAGE"
     if (root.selected) return root.selected.event.toUpperCase()
     if (root.demoMode) return "DEMO"
     if (root.fetchError !== "") return "ALERTS UNAVAILABLE"
@@ -428,6 +435,8 @@ Item {
     if (root.demoMode && root.demoScene)
       return "DEMO · " + root.demoScene.title
     if (!root.located) return "Set a weather location to watch this place."
+    if (root.outsideCoverage)
+      return "NWS alerts cover the United States and its territories. Choose a location there with omarchy-weather-location."
     if (root.fetchError !== "") {
       if (root.heldExpired)
         return root.fetchError + " · previous alerts have expired; current conditions unknown"
@@ -526,7 +535,7 @@ Item {
     interval: root.refreshMs
     running: root.configured
     repeat: true
-    onTriggered: root.refresh()
+    onTriggered: if (!root.outsideCoverage) root.refresh()
   }
 
   // Expiration must not wait for another (possibly very infrequent) poll.

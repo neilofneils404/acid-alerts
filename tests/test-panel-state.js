@@ -205,6 +205,26 @@ memory.rememberSeen(JSON.stringify({ seen: { fromFile: 9, newer: 10 } }))
 assert.equal(memory.seen.kept, 50)
 assert.equal(memory.seen.newer, 80)
 assert.equal(Model.seenTime(memory.seen.fromFile), 9)
+// A point outside NWS coverage is a location problem, not an outage.
+const abroad = panel()
+abroad.fetchInFlight = true
+abroad.requestExited = true
+abroad.requestExitCode = 22
+abroad.responseReady = true
+abroad.responseBody = JSON.stringify({ title: 'Invalid Parameter', status: 400, detail: 'Parameter "point" is invalid: out of bounds' })
+abroad.finishFetch()
+assert.equal(abroad.outsideCoverage, true)
+assert.equal(abroad.statusHeading(), 'OUTSIDE NWS COVERAGE')
+assert.match(abroad.heroMeta(), /United States/)
+const outage = panel()
+outage.fetchInFlight = true
+outage.requestExited = true
+outage.requestExitCode = 22
+outage.responseReady = true
+outage.responseBody = JSON.stringify({ title: 'Unexpected Problem', status: 500, detail: 'An unexpected problem has occurred.' })
+outage.finishFetch()
+assert.equal(outage.outsideCoverage, false)
+assert.equal(outage.fetchError, 'NWS is unreachable')
 console.log('panel state regression tests: ok')
 
 // Failed/oversized/truncated transfers must never reach either parser, even

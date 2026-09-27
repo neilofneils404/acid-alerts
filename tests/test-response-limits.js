@@ -21,7 +21,7 @@ assert.equal(Model.parseCollection(empty + ' '.repeat(limit - empty.length)).err
 assert.ok(Model.parseCollection(empty.slice(0, -1)).error)
 
 // Run the actual command arrays from both QML paths against a local HTTP server.
-const source = fs.readFileSync(require.resolve('../Panel.qml'), 'utf8')
+const source = fs.readFileSync(require.resolve('../Service.qml'), 'utf8')
 const commands = [...source.matchAll(/(?:fetchProc|zoneProc)\.command = (\[[\s\S]*?\n    \])/g)]
 assert.equal(commands.length, 2)
 const server = http.createServer((req, res) => {

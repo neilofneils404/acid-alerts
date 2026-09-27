@@ -6,8 +6,9 @@
   "author": "Neil",
   "license": "MIT",
   "description": "National Weather Service alerts for your Omarchy weather location. Warnings on by default; watches and advisories are opt-in.",
-  "kinds": ["bar-widget"],
+  "kinds": ["service", "bar-widget"],
   "entryPoints": {
+    "service": "Service.qml",
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {

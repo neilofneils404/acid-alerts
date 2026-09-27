@@ -1,10 +1,10 @@
-// Exercise the actual panel's JavaScript handlers without a running desktop.
+// Exercise the actual service's JavaScript handlers without a running desktop.
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const Model = require('../Model.js')
-const source = fs.readFileSync(path.join(__dirname, '../Panel.qml'), 'utf8')
+const source = fs.readFileSync(path.join(__dirname, '../Service.qml'), 'utf8')
 const functions = [...source.matchAll(/^  function (\w+)\([^\n]*\) \{[\s\S]*?^  \}/gm)]
 const fixture = fs.readFileSync(path.join(__dirname, 'nws-flood-advisory.json'), 'utf8')
 const empty = JSON.stringify({ type: 'FeatureCollection', features: [] })
@@ -267,3 +267,14 @@ assert.equal(aging.alertCount, 0)
 assert.equal(aging.heldExpired, true)
 assert.equal(aging.filteredOut, false)
 assert.match(source, /interval: 1000\s+running: !root.demoMode && root.fetchError !== "" && root.alertCount > 0\s+repeat: true\s+onTriggered: root.applyVisible\(\)/)
+
+// The bar builds a widget and panel per monitor. Only the shared service may
+// poll NWS or send notifications, or each monitor repeats them.
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../manifest.json'), 'utf8'))
+assert.ok(manifest.kinds.includes('service'))
+assert.equal(manifest.entryPoints.service, 'Service.qml')
+for (const file of ['BarWidget.qml', 'Panel.qml']) {
+  const view = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
+  assert.doesNotMatch(view, /\bProcess\s*\{|execDetached|FileView\s*\{/, file)
+}
+console.log('single shared service: ok')

@@ -34,6 +34,8 @@ omarchy plugin add https://github.com/neilofneils404/acid-alerts.git --enable
 
 Acid Alerts uses the location set by `omarchy-weather-location`. Open the diamond in your bar to review your filters. The default refresh interval is **60 seconds**.
 
+One background service checks NWS and sends notifications for all of your monitors. If you update from 1.1.0 or earlier, run `omarchy restart shell` once so the shell loads it.
+
 ## See it in action
 
 <p align="center">

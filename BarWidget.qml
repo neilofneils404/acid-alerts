@@ -1,10 +1,18 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "Model.js" as Model
 
 BarWidget {
   id: root
   moduleName: "neil.acid-alerts"
+
+  // The shell hosts Service.qml once for every monitor's bar. A bar that
+  // cannot hand it over (a replacement bar) gets a private copy instead.
+  property var sharedService: null
+  property int serviceAttempts: 0
+  readonly property bool serviceMissing: sharedService === null && serviceAttempts >= 10
+  readonly property var service: sharedService || localService.item || null
 
   readonly property bool opened: panelLoader.item
     ? panelLoader.item.opened === true
@@ -12,19 +20,21 @@ BarWidget {
   readonly property bool popoutSwitchClosing: panelLoader.item
     ? panelLoader.item.popoutSwitchClosing === true
     : false
-  readonly property int alertCount: panelLoader.item ? panelLoader.item.alertCount : 0
-  readonly property string label: panelLoader.item ? panelLoader.item.label : ""
-  readonly property string barIcon: panelLoader.item ? panelLoader.item.barIcon : ""
-  readonly property string tooltip: panelLoader.item ? panelLoader.item.barTooltip : "Acid Alerts"
-  readonly property bool warningActive: panelLoader.item ? panelLoader.item.warningActive : false
-  readonly property bool hasAlerts: alertCount > 0
-  readonly property string barMood: panelLoader.item ? panelLoader.item.barMood : "checking"
-  readonly property string idleLabel: panelLoader.item ? panelLoader.item.barText : ""
-  readonly property bool showState: !hasAlerts && idleLabel !== ""
-  readonly property bool hideWhenClear: {
-    var value = root.settings ? root.settings.hideWhenClear : false
-    return value === true || value === 1 || value === "true" || value === "1" || value === "yes"
+  readonly property int alertCount: service ? service.alertCount : 0
+  readonly property string label: {
+    if (!service) return ""
+    var text = Model.barLabel(service.alerts, root.vertical)
+    if (service.demoMode && text !== "") return "DEMO" + (root.vertical ? " " : " · ") + text
+    return text
   }
+  readonly property string barIcon: service ? service.barIcon : ""
+  readonly property string tooltip: service ? service.barTooltip : "Acid Alerts"
+  readonly property bool warningActive: service ? service.warningActive : false
+  readonly property bool hasAlerts: alertCount > 0
+  readonly property string barMood: service ? service.barMood : "checking"
+  readonly property string idleLabel: service ? service.barText : ""
+  readonly property bool showState: !hasAlerts && idleLabel !== ""
+  readonly property bool hideWhenClear: Model.parseBoolSetting(setting("hideWhenClear", false), false)
   // Side bars have room for symbols and counts, not event names.
   readonly property var verticalAlertLabels: {
     var rows = [root.barIcon || "!"]
@@ -61,6 +71,33 @@ BarWidget {
     if (panelLoader.item && panelLoader.item.refresh) panelLoader.item.refresh()
   }
 
+  function resolveService() {
+    var shell = root.bar ? root.bar.shell : null
+    var found = shell && typeof shell.serviceFor === "function" ? shell.serviceFor(root.moduleName) : null
+    if (found) {
+      root.sharedService = found
+      root.serviceAttempts = 0
+    } else {
+      root.serviceAttempts += 1
+    }
+  }
+
+  function configureService() {
+    if (root.service && root.bar) root.service.configure(root.settings)
+  }
+
+  function syncPanel() {
+    if (!root.service) {
+      panelLoader.source = ""
+      return
+    }
+    if (panelLoader.item) {
+      panelLoader.item.service = root.service
+      return
+    }
+    panelLoader.setSource(Qt.resolvedUrl("Panel.qml"), { service: root.service })
+  }
+
   function injectPanel() {
     if (!panelLoader.item) return
     panelLoader.item.bar = root.bar
@@ -73,15 +110,39 @@ BarWidget {
   implicitWidth: hasAlerts ? alertButton.implicitWidth : (showState ? stateButton.implicitWidth : idleButton.implicitWidth)
   implicitHeight: hasAlerts ? alertButton.implicitHeight : (showState ? stateButton.implicitHeight : idleButton.implicitHeight)
 
-  onBarChanged: injectPanel()
-  onSettingsChanged: injectPanel()
+  // The bar injects `bar` and then `settings` in one pass. Look up the service
+  // after that pass so it is never configured with the empty default settings.
+  onBarChanged: {
+    if (!root.sharedService) Qt.callLater(root.resolveService)
+    injectPanel()
+  }
+  onSettingsChanged: {
+    configureService()
+    injectPanel()
+  }
+  onServiceChanged: {
+    configureService()
+    syncPanel()
+  }
   onHasAlertsChanged: injectPanel()
   onShowStateChanged: injectPanel()
 
+  // The shell may create the service after this widget. Keep asking briefly.
+  Timer {
+    interval: 500
+    repeat: true
+    running: root.sharedService === null && root.serviceAttempts < 10
+    onTriggered: root.resolveService()
+  }
+
+  Loader {
+    id: localService
+    active: root.serviceMissing
+    source: Qt.resolvedUrl("Service.qml")
+  }
+
   Loader {
     id: panelLoader
-    active: true
-    source: Qt.resolvedUrl("Panel.qml")
     visible: false
     onLoaded: {
       root.injectPanel()

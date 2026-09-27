@@ -244,3 +244,17 @@ const storm = { geometryKind: "polygon", rings: [west], polygons: [[west]], zone
 Model.attachZoneRings([storm], zoneCache)
 assert.equal(storm.polygons.length, 1, "issued storm geometry is preserved")
 assert.equal(Model.shouldNotify({ id: "watch", event: "Tornado Watch", rank: 3, urgencyRank: 3 }, {}, true), false)
+
+// The manifest describes the same settings the code reads.
+const manifest = JSON.parse(require("node:fs").readFileSync(require("node:path").join(__dirname, "../manifest.json"), "utf8"))
+const widgetDefaults = manifest.barWidget.defaults
+const filterDefaults = Model.parseFilter({})
+assert.strictEqual(widgetDefaults.showWarnings, filterDefaults.warnings)
+assert.strictEqual(widgetDefaults.showWatches, filterDefaults.watches)
+assert.strictEqual(widgetDefaults.showAdvisories, filterDefaults.advisories)
+assert.deepStrictEqual(widgetDefaults.families, filterDefaults.families)
+const familyField = manifest.barWidget.schema.find(field => field.key === "families")
+assert.deepStrictEqual(familyField.options.map(option => option.value), Model.familyOptions().map(option => option.id))
+for (const field of manifest.barWidget.schema) {
+  if (field.key in widgetDefaults && "defaultValue" in field) assert.deepStrictEqual(field.defaultValue, widgetDefaults[field.key], field.key)
+}

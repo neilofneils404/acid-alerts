@@ -16,6 +16,141 @@
     "description": "Warnings for your weather location, with an idle brand mark when the area is clear.",
     "category": "Info",
     "allowMultiple": false,
-    "defaultSection": "center"
+    "defaultSection": "center",
+    "defaults": {
+      "showWarnings": true,
+      "showWatches": false,
+      "showAdvisories": false,
+      "families": [],
+      "refreshSeconds": 60,
+      "hideWhenClear": false,
+      "demo": false
+    },
+    "schema": [
+      {
+        "key": "showWarnings",
+        "type": "boolean",
+        "label": "Warnings",
+        "description": "Warning products, their follow-up statements, and civil emergencies.",
+        "defaultValue": true
+      },
+      {
+        "key": "showWatches",
+        "type": "boolean",
+        "label": "Watches",
+        "description": "Conditions are favorable for the hazard.",
+        "defaultValue": false
+      },
+      {
+        "key": "showAdvisories",
+        "type": "boolean",
+        "label": "Advisories",
+        "description": "Fog, heat, special weather statements, and other lower-tier products.",
+        "defaultValue": false
+      },
+      {
+        "key": "families",
+        "type": "multiselect",
+        "label": "Weather families",
+        "description": "Limit alerts to these families. Leave empty to include all.",
+        "noSelectionText": "All families",
+        "placeholderText": "Search families...",
+        "emptyText": "No families",
+        "options": [
+          {
+            "value": "tornado",
+            "label": "Tornado"
+          },
+          {
+            "value": "thunderstorm",
+            "label": "Severe tstorm"
+          },
+          {
+            "value": "flashflood",
+            "label": "Flash flood"
+          },
+          {
+            "value": "flood",
+            "label": "Flood"
+          },
+          {
+            "value": "winter",
+            "label": "Winter / ice"
+          },
+          {
+            "value": "wind",
+            "label": "Wind"
+          },
+          {
+            "value": "cold",
+            "label": "Cold / freeze"
+          },
+          {
+            "value": "heat",
+            "label": "Heat"
+          },
+          {
+            "value": "fire",
+            "label": "Fire"
+          },
+          {
+            "value": "tropical",
+            "label": "Tropical"
+          },
+          {
+            "value": "fog",
+            "label": "Fog / smoke"
+          },
+          {
+            "value": "other",
+            "label": "Other"
+          }
+        ]
+      },
+      {
+        "key": "refreshSeconds",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 30,
+        "max": 3600,
+        "step": 30,
+        "defaultValue": 60
+      },
+      {
+        "key": "hideWhenClear",
+        "type": "boolean",
+        "label": "Hide when clear",
+        "description": "Hide the bar mark after a successful check with nothing to show.",
+        "defaultValue": false
+      },
+      {
+        "key": "name",
+        "type": "string",
+        "label": "Location name",
+        "description": "Optional. Used with latitude and longitude to override the Omarchy weather location.",
+        "defaultValue": ""
+      },
+      {
+        "key": "latitude",
+        "type": "string",
+        "label": "Latitude",
+        "description": "Optional location override, in decimal degrees.",
+        "defaultValue": ""
+      },
+      {
+        "key": "longitude",
+        "type": "string",
+        "label": "Longitude",
+        "description": "Optional location override, in decimal degrees.",
+        "defaultValue": ""
+      },
+      {
+        "key": "demo",
+        "type": "boolean",
+        "label": "Demo mode",
+        "description": "Show sample alerts instead of live NWS data.",
+        "defaultValue": false
+      }
+    ]
   }
 }

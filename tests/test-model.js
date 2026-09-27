@@ -244,6 +244,10 @@ const storm = { geometryKind: "polygon", rings: [west], polygons: [[west]], zone
 Model.attachZoneRings([storm], zoneCache)
 assert.equal(storm.polygons.length, 1, "issued storm geometry is preserved")
 assert.equal(Model.shouldNotify({ id: "watch", event: "Tornado Watch", rank: 3, urgencyRank: 3 }, {}, true), false)
+assert.strictEqual(Model.noticeUrgency({ event: "Tornado Warning", rank: 4 }), "critical")
+assert.strictEqual(Model.noticeUrgency({ event: "Evacuation Immediate", rank: 4 }), "critical")
+assert.strictEqual(Model.noticeUrgency({ event: "Tornado Watch", rank: 3 }), "normal")
+assert.strictEqual(Model.noticeUrgency({ event: "Flood Warning", rank: 2 }), "normal")
 
 // The manifest describes the same settings the code reads.
 const manifest = JSON.parse(require("node:fs").readFileSync(require("node:path").join(__dirname, "../manifest.json"), "utf8"))

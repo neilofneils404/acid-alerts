@@ -618,6 +618,13 @@ function shouldNotify(alert, seen, firstLoad) {
   return false
 }
 
+// Critical notifications stay on screen, so they are kept for warnings that
+// NWS rates Severe or Extreme. A Severe watch is still only a watch.
+function noticeUrgency(alert) {
+  if (!alert) return "normal"
+  return eventClass(alert.event) === "warning" && isWarningRank(alert.rank) ? "critical" : "normal"
+}
+
 // An update to an alert we already announced stays quiet unless it changes
 // the event (a watch upgraded to a warning) or raises the severity.
 function continuesSeen(alert, seen) {
@@ -1074,6 +1081,7 @@ if (typeof module !== "undefined" && module.exports) {
     matchesFilter: matchesFilter,
     filterAlerts: filterAlerts,
     shouldNotify: shouldNotify,
+    noticeUrgency: noticeUrgency,
     continuesSeen: continuesSeen,
     extractReferences: extractReferences,
     seenTime: seenTime,

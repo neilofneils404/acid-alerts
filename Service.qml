@@ -366,7 +366,7 @@ Item {
   }
 
   function sendNotice(alert) {
-    var urgency = Model.isWarningRank(alert.rank) ? "critical" : "normal"
+    var urgency = Model.noticeUrgency(alert)
     Quickshell.execDetached([
       "omarchy-notification-send",
       "--app-name", "Acid Alerts",

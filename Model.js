@@ -304,8 +304,23 @@ function normalizeAlert(feature) {
     rings: rings,
     polygons: polygons,
     zoneUrls: extractZoneUrls(properties),
+    references: extractReferences(properties),
     geometryKind: kind
   }
+}
+
+// Each NWS update is a new message with a new id. `references` names the
+// messages it replaces, which is how an update is tied to what we have seen.
+function extractReferences(properties) {
+  var out = []
+  var list = properties && properties.references
+  if (!list || !list.length) return out
+  for (var i = 0; i < list.length; i++) {
+    var ref = list[i]
+    var id = String((ref && typeof ref === "object" ? ref.identifier : ref) || "")
+    if (id !== "" && out.indexOf(id) === -1) out.push(id)
+  }
+  return out
 }
 
 function eventIcon(event) {
@@ -505,11 +520,25 @@ function filterAlerts(alerts, filter) {
 function shouldNotify(alert, seen, firstLoad) {
   if (!alert || !alert.id) return false
   if (seen && seen[alert.id]) return false
+  if (continuesSeen(alert, seen)) return false
   // The first check only interrupts for a warning that needs action now.
   // Expected/Future urgency does not interrupt on startup.
   if (firstLoad) return eventClass(alert.event) === "warning" && alert.rank >= 3 && alert.urgencyRank >= 3
   if (alert.rank >= 3) return true
   if (alert.rank >= 2 && alert.urgencyRank >= 3) return true
+  return false
+}
+
+// An update to an alert we already announced stays quiet unless it changes
+// the event (a watch upgraded to a warning) or raises the severity.
+function continuesSeen(alert, seen) {
+  if (!alert || !seen) return false
+  var refs = alert.references || []
+  for (var i = 0; i < refs.length; i++) {
+    var prior = seen[refs[i]]
+    if (!prior || typeof prior !== "object") continue
+    if (prior.event === alert.event && Number(alert.rank) <= Number(prior.rank)) return true
+  }
   return false
 }
 
@@ -527,21 +556,42 @@ function unexpired(alerts, nowMs) {
   return out
 }
 
+// Seen entries record when an alert was seen and what it was, so a later
+// update can be compared with it. Older files stored only the time.
+function seenTime(entry) {
+  if (entry && typeof entry === "object") return Number(entry.at)
+  return Number(entry)
+}
+
+function seenEntry(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    var at = Number(value.at)
+    if (!isFinite(at)) return null
+    return { at: at, event: String(value.event || ""), rank: Number(value.rank) || 0 }
+  }
+  var stamp = Number(value)
+  return isFinite(stamp) ? { at: stamp, event: "", rank: 0 } : null
+}
+
 function mergeSeen(seen, alerts, nowMs, maxAgeMs) {
   var next = {}
   var age = isFinite(Number(maxAgeMs)) ? Number(maxAgeMs) : 172800000
   var now = Number(nowMs)
   if (seen && typeof seen === "object") {
     for (var key in seen) {
-      var stamp = Number(seen[key])
-      if (isFinite(stamp) && isFinite(now) && (now - stamp) <= age) next[key] = stamp
+      var entry = seenEntry(seen[key])
+      if (entry && isFinite(now) && (now - entry.at) <= age) next[key] = entry
     }
   }
   if (alerts) {
     for (var i = 0; i < alerts.length; i++) {
-      var id = alerts[i] && alerts[i].id
-      if (!id) continue
-      next[id] = isFinite(now) ? now : Date.now()
+      var alert = alerts[i]
+      if (!alert || !alert.id) continue
+      next[alert.id] = {
+        at: isFinite(now) ? now : Date.now(),
+        event: String(alert.event || ""),
+        rank: Number(alert.rank) || 0
+      }
     }
   }
   return next
@@ -555,8 +605,8 @@ function parseSeen(raw) {
     if (!seen || typeof seen !== "object" || Array.isArray(seen)) return {}
     var out = {}
     for (var key in seen) {
-      var stamp = Number(seen[key])
-      if (isFinite(stamp)) out[key] = stamp
+      var entry = seenEntry(seen[key])
+      if (entry) out[key] = entry
     }
     return out
   } catch (e) {
@@ -934,6 +984,9 @@ if (typeof module !== "undefined" && module.exports) {
     matchesFilter: matchesFilter,
     filterAlerts: filterAlerts,
     shouldNotify: shouldNotify,
+    continuesSeen: continuesSeen,
+    extractReferences: extractReferences,
+    seenTime: seenTime,
     unexpired: unexpired,
     mergeSeen: mergeSeen,
     parseSeen: parseSeen,

@@ -248,7 +248,7 @@ Item {
     var loaded = Model.parseSeen(raw)
     if (root.seen) {
       for (var key in root.seen) {
-        if (loaded[key] === undefined || Number(root.seen[key]) > Number(loaded[key]))
+        if (loaded[key] === undefined || Model.seenTime(root.seen[key]) > Model.seenTime(loaded[key]))
           loaded[key] = root.seen[key]
       }
     }

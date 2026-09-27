@@ -204,7 +204,7 @@ memory.seenHydrated = true
 memory.rememberSeen(JSON.stringify({ seen: { fromFile: 9, newer: 10 } }))
 assert.equal(memory.seen.kept, 50)
 assert.equal(memory.seen.newer, 80)
-assert.equal(memory.seen.fromFile, 9)
+assert.equal(Model.seenTime(memory.seen.fromFile), 9)
 console.log('panel state regression tests: ok')
 
 // Failed/oversized/truncated transfers must never reach either parser, even

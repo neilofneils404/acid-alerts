@@ -76,7 +76,31 @@ const northEdge = Model.project(-81.65, 41.5, framed, 200, 200)
 assert.ok(Math.abs(northEdge.y - southEdge.y) > Math.abs(eastEdge.x - westEdge.x))
 
 const seen = Model.parseSeen(Model.serializeSeen({ "urn:1": 100 }))
-assert.strictEqual(seen["urn:1"], 100)
+assert.deepStrictEqual(seen["urn:1"], { at: 100, event: "", rank: 0 })
+
+// NWS gives every update a new id and lists the messages it replaces.
+// An update to something already announced stays quiet.
+const original = Model.normalizeAlert({ properties: {
+  id: "urn:a", event: "Winter Storm Warning", severity: "Severe", urgency: "Expected",
+} })
+const remembered = Model.mergeSeen({}, [original], 1000, 172800000)
+assert.deepStrictEqual(remembered["urn:a"], { at: 1000, event: "Winter Storm Warning", rank: 3 })
+assert.deepStrictEqual(Model.parseSeen(Model.serializeSeen(remembered)), remembered)
+const update = Model.normalizeAlert({ properties: {
+  id: "urn:b", event: "Winter Storm Warning", severity: "Severe", urgency: "Expected",
+  messageType: "Update",
+  references: [{ "@id": "https://api.weather.gov/alerts/urn:a", identifier: "urn:a", sender: "w-nws.webmaster@noaa.gov", sent: "2026-01-01T00:00:00-05:00" }],
+} })
+assert.deepStrictEqual(update.references, ["urn:a"])
+assert.strictEqual(Model.shouldNotify(update, remembered, false), false)
+assert.strictEqual(Model.shouldNotify(update, {}, false), true)
+// A severity increase still interrupts.
+assert.strictEqual(Model.shouldNotify(Object.assign({}, update, { rank: 4 }), remembered, false), true)
+// A watch upgraded to a warning is a different event, so it notifies.
+const watchSeen = Model.mergeSeen({}, [{ id: "urn:w", event: "Winter Storm Watch", rank: 3 }], 1000, 172800000)
+assert.strictEqual(Model.shouldNotify(Object.assign({}, update, { references: ["urn:w"] }), watchSeen, false), true)
+// Entries from older seen-files carry no event, so they never hide an update.
+assert.strictEqual(Model.shouldNotify(update, Model.parseSeen('{"seen":{"urn:a":1000}}'), false), true)
 
 const Demo = require("../Demo.js")
 assert.strictEqual(Demo.demoEnabled({ demo: true }), true)

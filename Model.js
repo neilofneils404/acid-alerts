@@ -426,9 +426,17 @@ function leadUrgent(alert) {
   return eventClass(alert.event) === "warning" || isWarningRank(alert.rank)
 }
 
+// Life-safety products whose names do not end in "Warning". Sorting them by
+// suffix would file them with advisories, which are off by default.
+var EMERGENCY_PRODUCTS = {
+  "Evacuation Immediate": true,
+  "Civil Emergency Message": true
+}
+
 function eventClass(event) {
   var name = String(event || "")
   if (WARNING_FOLLOWUPS[name]) return "warning"
+  if (EMERGENCY_PRODUCTS[name] || /Emergency$/i.test(name)) return "warning"
   if (/Warning$/i.test(name)) return "warning"
   if (/Watch$/i.test(name)) return "watch"
   return "advisory"
@@ -436,6 +444,8 @@ function eventClass(event) {
 
 function familyOf(event) {
   var text = String(event || "").toLowerCase()
+  // Marine wind products named for their strength, not for a cyclone.
+  if (text.indexOf("hurricane force wind") !== -1) return "wind"
   if (text.indexOf("tornado") !== -1) return "tornado"
   if (text.indexOf("thunder") !== -1 || text.indexOf("severe weather statement") !== -1) return "thunderstorm"
   if (text.indexOf("flash flood") !== -1) return "flashflood"
@@ -444,7 +454,7 @@ function familyOf(event) {
   if (text.indexOf("heat") !== -1) return "heat"
   if (text.indexOf("cold") !== -1 || text.indexOf("chill") !== -1 || text.indexOf("freeze") !== -1 || text.indexOf("frost") !== -1) return "cold"
   if (text.indexOf("fire") !== -1 || text.indexOf("red flag") !== -1) return "fire"
-  if (text.indexOf("hurricane") !== -1 || text.indexOf("tropical") !== -1 || text.indexOf("tsunami") !== -1) return "tropical"
+  if (text.indexOf("hurricane") !== -1 || text.indexOf("tropical") !== -1 || text.indexOf("typhoon") !== -1) return "tropical"
   if (text.indexOf("wind") !== -1 || text.indexOf("dust") !== -1) return "wind"
   if (text.indexOf("fog") !== -1 || text.indexOf("smoke") !== -1) return "fog"
   return "other"

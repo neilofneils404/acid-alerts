@@ -396,7 +396,7 @@ Panel {
             Toggle {
               width: parent.width
               label: "Warnings"
-              description: "Default on. Includes warning follow-up statements."
+              description: "Default on. Includes follow-up statements and civil emergencies."
               checked: Model.parseBoolSetting(setting("showWarnings", true), true)
               foreground: root.contentForeground
               fontFamily: root.contentFontFamily

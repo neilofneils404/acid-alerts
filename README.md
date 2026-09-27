@@ -77,7 +77,7 @@ Change alert filters in the panel, or edit the Acid Alerts widget entry in `~/.c
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `showWarnings` | `true` | Show warning products, including flash flood, flood, and severe weather statements that follow a warning. |
+| `showWarnings` | `true` | Show warning products, including flash flood, flood, and severe weather statements that follow a warning, and civil emergencies such as Evacuation Immediate. |
 | `showWatches` | `false` | Include watches. |
 | `showAdvisories` | `false` | Include advisories and other lower-tier products. |
 | `families` | `[]` | Include all weather families, or limit to the selected families below. |

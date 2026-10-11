@@ -17,3 +17,22 @@ jobs:
           node tests/test-model.js
           node tests/test-panel-state.js
           node tests/test-response-limits.js
+      - name: Release tag matches the manifest version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(node -p "require('./manifest.json').version")
+          tag=${GITHUB_REF_NAME#v}
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest version $version" >&2
+            exit 1
+          fi
+
+  qml:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install Qt 6 qmllint
+        run: pacman -Syu --noconfirm --needed git qt6-declarative
+      - uses: actions/checkout@v4
+      - name: QML lint
+        run: sh scripts/lint-qml.sh

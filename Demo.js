@@ -212,15 +212,6 @@ function creek() {
   ])
 }
 
-function county() {
-  return poly([
-    [-0.18, 0.12],
-    [0.16, 0.14],
-    [0.20, -0.10],
-    [-0.14, -0.12]
-  ])
-}
-
 function ponding() {
   return poly([
     [-0.03, 0.02],

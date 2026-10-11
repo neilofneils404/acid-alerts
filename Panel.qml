@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
@@ -234,7 +233,7 @@ Panel {
             width: parent.width
             visible: root.service.selected !== null
             text: {
-              var caption = root.service.selected ? Model.footprintCaption(root.service.selected.geometryKind) : ""
+              var caption = root.service.footprintCaption
               if (root.service.alertCount > 1)
                 caption = (caption !== "" ? caption + " · " : "") + "map follows the selected alert"
               return caption

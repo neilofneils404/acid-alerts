@@ -8,8 +8,19 @@ const source = fs.readFileSync(path.join(__dirname, '../Service.qml'), 'utf8')
 const functions = [...source.matchAll(/^  function (\w+)\([^\n]*\) \{[\s\S]*?^  \}/gm)]
 const fixture = fs.readFileSync(path.join(__dirname, 'nws-flood-advisory.json'), 'utf8')
 const empty = JSON.stringify({ type: 'FeatureCollection', features: [] })
+// The handlers are lifted out of the QML by pattern. If the file's layout
+// changes, fail here and not by quietly testing nothing.
+const found = functions.map(match => match[1])
+for (const name of ['refresh', 'resetSource', 'finishFetch', 'abandonFetch', 'abandonZoneFetch', 'noteStaleness',
+  'applyPayload', 'releasePendingNotice', 'rememberSeen', 'applyVisible', 'enqueueZones', 'pumpZones',
+  'finishZoneFetch', 'applyZonePayload', 'notifyNewAlerts', 'persistSeen', 'sendNotice', 'statusHeading',
+  'heroMeta', 'footerText']) {
+  assert.ok(found.includes(name), `Service.qml handler not found: ${name}`)
+}
 
-function panel() {
+// `live` keeps the real notification and seen-file handlers, with the
+// notification command and the file write recorded instead of run.
+function panel(options = {}) {
   const root = {
     demoMode: false, located: true, location: { name: 'Test town' },
     incomingAlerts: [], alerts: [], selectedIndex: 0,
@@ -20,6 +31,9 @@ function panel() {
     filter: Model.parseFilter({ showAdvisories: true }),
     refreshCalls: 0, selectedId: '', heldExpired: false,
     seenHydrated: false, notifyWhenReady: false, zoneGeneration: 0, zoneRequestGeneration: 0,
+    seen: {}, zoneFailures: {}, zoneFetchUrl: '', unreadableCount: 0, lastSuccessMs: 0,
+    seenWritten: '', seenWrittenMs: 0, outsideCoverage: false, refreshMs: 60000,
+    notices: [], writes: [],
   }
   Object.defineProperties(root, {
     selected: { get: () => root.alerts[root.selectedIndex] || null },
@@ -31,13 +45,18 @@ function panel() {
     Qt: { formatDateTime: () => 'Sep 18 3:00 PM', callLater: fn => fn() },
     locationLabel: () => root.location.name,
     notifyNewAlerts: () => {}, persistSeen: () => {},
+    fetchProc: { running: false }, zoneProc: { running: false },
+    Quickshell: { execDetached: command => root.notices.push(command) },
+    seenFile: { setText: text => root.writes.push(text) },
   })
   for (const match of functions) {
     vm.runInContext(match[0], context)
     root[match[1]] = context[match[1]]
   }
-  context.notifyNewAlerts = () => {}
-  context.persistSeen = () => {}
+  if (!options.live) {
+    context.notifyNewAlerts = () => {}
+    context.persistSeen = () => {}
+  }
   root.enqueueZones = () => {}
   root.refresh = () => { root.refreshCalls++ }
   root._vm = context
@@ -230,6 +249,115 @@ outage.responseBody = JSON.stringify({ title: 'Unexpected Problem', status: 500,
 outage.finishFetch()
 assert.equal(outage.outsideCoverage, false)
 assert.equal(outage.fetchError, 'NWS is unreachable')
+
+// One unreadable feature beside a warning: the warning shows, and the panel
+// says something was left out.
+const torFeature = JSON.parse(fs.readFileSync(path.join(__dirname, 'nws-tornado-update.json'), 'utf8')).features[0]
+const partial = panel()
+partial.applyPayload(JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {} }, torFeature] }))
+assert.equal(partial.statusHeading(), 'TORNADO WARNING')
+assert.equal(partial.unreadableCount, 1)
+assert.match(partial.footerText(), /1 alert could not be read/)
+partial.applyPayload(empty)
+assert.equal(partial.unreadableCount, 0)
+assert.doesNotMatch(partial.footerText(), /could not be read/)
+
+// A check that never reports back is abandoned, so the next one can start.
+const stuck = panel()
+stuck.applyPayload(empty)
+stuck.fetchInFlight = true
+stuck._vm.fetchProc.running = true
+stuck.abandonFetch()
+assert.equal(stuck.fetchInFlight, false)
+assert.equal(stuck._vm.fetchProc.running, false)
+assert.equal(stuck.fetchError, 'NWS check did not finish')
+assert.equal(stuck.statusHeading(), 'ALERTS UNAVAILABLE')
+stuck.abandonFetch()
+assert.equal(stuck.fetchError, 'NWS check did not finish')
+// Output arriving after that is ignored.
+stuck.responseReady = true
+stuck.requestExited = true
+stuck.requestExitCode = 0
+stuck.responseBody = fixture
+stuck.finishFetch()
+assert.equal(stuck.alertCount, 0)
+assert.match(source, /interval: 15000\s+running: root.fetchInFlight\s+repeat: false\s+onTriggered: root.abandonFetch\(\)/)
+assert.match(source, /interval: 15000\s+running: root.zoneFetchInFlight\s+repeat: false\s+onTriggered: root.abandonZoneFetch\(\)/)
+// A check abandoned for a location that has since changed just asks again.
+const moved = panel()
+moved.fetchInFlight = true
+moved.fetchGeneration = 1
+moved.abandonFetch()
+assert.equal(moved.fetchError, '')
+assert.equal(moved.refreshCalls, 1)
+
+// "Clear" expires when checks stop landing, and a new check is asked for.
+const quiet = panel()
+quiet.applyPayload(empty)
+quiet.noteStaleness()
+assert.equal(quiet.fetchError, '')
+quiet.lastSuccessMs = Date.now() - 211000
+quiet.noteStaleness()
+assert.equal(quiet.fetchError, 'No recent NWS check')
+assert.equal(quiet.statusHeading(), 'ALERTS UNAVAILABLE')
+assert.equal(quiet.refreshCalls, 1)
+quiet.applyPayload(empty)
+assert.equal(quiet.fetchError, '')
+assert.ok(Date.now() - quiet.lastSuccessMs < 5000)
+assert.match(source, /interval: 10000\s+running: root.configured && root.hasSuccessfulFetch && !root.demoMode\s+repeat: true\s+onTriggered: root.noteStaleness\(\)/)
+
+// The real notification path: seen-file, filters, and first load together.
+const feature = (id, event, severity, urgency, extra) => ({ type: 'Feature', properties: Object.assign(
+  { id, event, severity, urgency, headline: event + ' headline', expires: '2099-01-01T00:00:00Z' }, extra) })
+const collection = (...features) => JSON.stringify({ type: 'FeatureCollection', features })
+const live = panel({ live: true })
+live.filter = Model.parseFilter({})
+live.seenHydrated = true
+// First load: only a warning that needs action now interrupts.
+live.applyPayload(collection(
+  feature('tor', 'Tornado Warning', 'Extreme', 'Immediate'),
+  feature('wsw', 'Winter Storm Warning', 'Severe', 'Expected'),
+  feature('watch', 'Tornado Watch', 'Severe', 'Immediate')))
+assert.deepEqual(live.notices.map(command => command[7]), ['Tornado Warning'])
+assert.deepEqual([...live.notices[0]].slice(0, 7), ['omarchy-notification-send', '--app-name', 'Acid Alerts', '-u', 'critical', '-g', live.alerts[0].icon])
+assert.deepEqual([...live.notices[0]].slice(8), ['Tornado Warning headline', '--exec', 'omarchy-shell', 'shell', 'summon', 'neil.acid-alerts', '{}'])
+assert.equal(live.firstLoad, false)
+// Everything in the response is remembered, including what the filter hid.
+assert.deepEqual(Object.keys(live.seen).sort(), ['tor', 'watch', 'wsw'])
+assert.equal(live.writes.length, 1)
+// The same response again: no notice, and no rewrite of an unchanged file.
+live.applyPayload(collection(
+  feature('tor', 'Tornado Warning', 'Extreme', 'Immediate'),
+  feature('wsw', 'Winter Storm Warning', 'Severe', 'Expected'),
+  feature('watch', 'Tornado Watch', 'Severe', 'Immediate')))
+assert.equal(live.notices.length, 1)
+assert.equal(live.writes.length, 1)
+// After an hour the times are written again even with nothing new.
+live.seenWrittenMs -= 3600001
+live.applyPayload(collection(feature('tor', 'Tornado Warning', 'Extreme', 'Immediate'),
+  feature('wsw', 'Winter Storm Warning', 'Severe', 'Expected'), feature('watch', 'Tornado Watch', 'Severe', 'Immediate')))
+assert.equal(live.writes.length, 2)
+// Later checks: a quiet update, an escalated update, a new warning, and a
+// watch that the filter hides.
+live.applyPayload(collection(
+  feature('tor2', 'Tornado Warning', 'Extreme', 'Immediate', { references: [{ identifier: 'tor' }] }),
+  feature('wsw2', 'Winter Storm Warning', 'Severe', 'Immediate', { references: [{ identifier: 'wsw' }] }),
+  feature('ffw', 'Flash Flood Warning', 'Severe', 'Immediate'),
+  feature('watch2', 'Severe Thunderstorm Watch', 'Severe', 'Future')))
+assert.deepEqual(live.notices.slice(1).map(command => command[7]).sort(), ['Flash Flood Warning', 'Winter Storm Warning'])
+assert.equal(live.writes.length, 3)
+assert.deepEqual(JSON.parse(live.writes[2]).seen.tor2, { at: live.seen.tor2.at, event: 'Tornado Warning', rank: 4, urgency: 3, threat: 0 })
+// A tornado warning raised to an emergency keeps its event and severity.
+live.applyPayload(collection(feature('tor3', 'Tornado Warning', 'Extreme', 'Immediate',
+  { references: [{ identifier: 'tor' }, { identifier: 'tor2' }], parameters: { tornadoDamageThreat: ['CATASTROPHIC'] } })))
+assert.equal(live.notices.length, 4)
+assert.equal(live.notices[3][7], 'Tornado Warning')
+// Demo alerts never notify.
+const demo = panel({ live: true })
+demo.seenHydrated = true
+demo.demoMode = true
+demo.notifyNewAlerts([Model.normalizeAlert(feature('d', 'Tornado Warning', 'Extreme', 'Immediate'))])
+assert.equal(demo.notices.length, 0)
 console.log('panel state regression tests: ok')
 
 // Failed/oversized/truncated transfers must never reach either parser, even
@@ -271,10 +399,49 @@ for (const zone of [false, true]) {
 }
 const badZone = panel()
 badZone.zoneFetchUrl = 'https://api.weather.gov/zones/forecast/OHZ010'
-for (const raw of ['{', '{}', ' '.repeat(Model.responseByteLimit() + 1)]) {
-  badZone.applyZonePayload(raw)
+for (const raw of ['{', '{}', ' '.repeat(Model.zoneByteLimit() + 1)]) {
+  assert.equal(badZone.applyZonePayload(raw), false)
   assert.equal(Object.keys(badZone.zoneCache).length, 0)
 }
+// A zone with nothing to draw, a failed transfer, and one that never reports
+// back are each remembered, so the next check does not ask again at once.
+const zoneUrl = 'https://api.weather.gov/zones/county/FLC087'
+for (const failure of ['unreadable', 'transfer', 'stuck']) {
+  const q = panel()
+  q.pumpZones = () => {}
+  q.zoneFetchUrl = zoneUrl
+  q.zoneFetchInFlight = true
+  if (failure === 'stuck') {
+    q.abandonZoneFetch()
+  } else {
+    q.zoneResponseReady = true
+    q.zoneRequestExited = true
+    q.zoneRequestExitCode = failure === 'transfer' ? 63 : 0
+    q.zoneResponseBody = '{}'
+    q.finishZoneFetch()
+  }
+  assert.equal(q.zoneFetchInFlight, false, failure)
+  assert.equal(q.zoneFailures[zoneUrl].count, 1, failure)
+  const waiting = [{ zoneUrls: [zoneUrl], rings: [], polygons: [] }]
+  assert.deepEqual(Model.missingZoneUrls(waiting, q.zoneCache, q.zoneFailures, Date.now()), [], failure)
+  assert.deepEqual(Model.missingZoneUrls(waiting, q.zoneCache, q.zoneFailures, Date.now() + 301000), [zoneUrl], failure)
+}
+// The captured GeometryCollection county loads and is not counted as failed.
+const keys = panel()
+keys.pumpZones = () => {}
+keys.zoneFetchUrl = zoneUrl
+keys.incomingAlerts = [Model.normalizeAlert({ properties: { id: 'keys', event: 'Hurricane Warning', severity: 'Extreme', affectedZones: [zoneUrl] } })]
+keys.filter = Model.parseFilter({})
+keys.zoneFetchInFlight = true
+keys.zoneResponseReady = true
+keys.zoneRequestExited = true
+keys.zoneRequestExitCode = 0
+keys.zoneResponseBody = fs.readFileSync(path.join(__dirname, 'nws-zone-geometry-collection.json'), 'utf8')
+keys.finishZoneFetch()
+assert.deepEqual(Object.keys(keys.zoneFailures), [])
+assert.ok(keys.zoneCache[zoneUrl].length >= 4)
+assert.equal(keys.alerts[0].geometryKind, 'zone')
+assert.equal(keys.alerts[0].zonesDrawn, 1)
 console.log('transfer completion regression tests: ok')
 
 // Cached alerts age out independently of network completion.

@@ -164,6 +164,25 @@ var EVENT_ICON = {
   "Air Quality Alert": ""
 }
 
+// A coordinate is a finite number or a numeric string. A blank string, null,
+// or a boolean would all coerce to 0 and put the point in the Gulf of Guinea.
+function coordinate(value, limit) {
+  if (typeof value === "string") {
+    if (value.replace(/^\s+|\s+$/g, "") === "") return null
+  } else if (typeof value !== "number") {
+    return null
+  }
+  var number = Number(value)
+  if (!isFinite(number) || Math.abs(number) > limit) return null
+  return number
+}
+
+// Table lookups by a name from the feed. A plain `table[name]` would also
+// find "constructor" and the rest of Object.prototype.
+function own(table, key) {
+  return !!table && Object.prototype.hasOwnProperty.call(table, key)
+}
+
 function parseLocation(raw, settings) {
   var unset = { name: "", latitude: null, longitude: null, source: "none" }
   var fromSettings = locationFromSettings(settings)
@@ -174,11 +193,9 @@ function parseLocation(raw, settings) {
   try {
     var data = JSON.parse(text)
     if (!data || typeof data !== "object") return unset
-    var latitude = Number(data.latitude)
-    var longitude = Number(data.longitude)
-    var hasCoordinates = isFinite(latitude) && isFinite(longitude)
-      && latitude >= -90 && latitude <= 90
-      && longitude >= -180 && longitude <= 180
+    var latitude = coordinate(data.latitude, 90)
+    var longitude = coordinate(data.longitude, 180)
+    var hasCoordinates = latitude !== null && longitude !== null
     var name = typeof data.name === "string" ? data.name.replace(/^\s+|\s+$/g, "") : ""
     return {
       name: name,
@@ -194,10 +211,9 @@ function parseLocation(raw, settings) {
 function locationFromSettings(settings) {
   var unset = { name: "", latitude: null, longitude: null, source: "none" }
   if (!settings || typeof settings !== "object") return unset
-  var latitude = Number(settings.latitude)
-  var longitude = Number(settings.longitude)
-  if (!isFinite(latitude) || !isFinite(longitude)) return unset
-  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return unset
+  var latitude = coordinate(settings.latitude, 90)
+  var longitude = coordinate(settings.longitude, 180)
+  if (latitude === null || longitude === null) return unset
   var name = typeof settings.name === "string" ? settings.name.replace(/^\s+|\s+$/g, "") : ""
   return {
     name: name,
@@ -208,22 +224,32 @@ function locationFromSettings(settings) {
 }
 
 function hasCoordinates(location) {
-  return !!(location && isFinite(Number(location.latitude)) && isFinite(Number(location.longitude)))
+  return !!(location && coordinate(location.latitude, 90) !== null && coordinate(location.longitude, 180) !== null)
+}
+
+// Four decimals is about 11 m, which is all a point query needs, and it keeps
+// a tiny value from being written in exponent form.
+function pointText(value) {
+  return String(Number(Number(value).toFixed(4)))
 }
 
 function alertsUrl(location) {
   if (!hasCoordinates(location)) return ""
   return "https://api.weather.gov/alerts/active?point="
-    + encodeURIComponent(String(location.latitude)) + ","
-    + encodeURIComponent(String(location.longitude))
+    + encodeURIComponent(pointText(location.latitude)) + ","
+    + encodeURIComponent(pointText(location.longitude))
 }
 
 // curl >= 8.4.0 enforces this even without Content-Length. Keep the parser
 // guard in bytes too, without allocating another encoded copy of the body.
 function responseByteLimit() { return 1024 * 1024 }
 
-function responseTooLarge(text) {
-  var limit = responseByteLimit()
+// Zone outlines are larger than alert feeds: coastal and island counties run
+// past 2 MiB.
+function zoneByteLimit() { return 4 * 1024 * 1024 }
+
+function responseTooLarge(text, byteLimit) {
+  var limit = byteLimit > 0 ? byteLimit : responseByteLimit()
   if (text.length > limit) return true
   var bytes = 0
   for (var i = 0; i < text.length; i++) {
@@ -256,8 +282,10 @@ function outsideCoverage(raw) {
   }
 }
 
+// `unreadable` counts features that could not be read. They are left out so
+// one damaged feature cannot hide a readable warning next to it.
 function parseCollection(raw) {
-  var empty = { alerts: [], error: "" }
+  var empty = { alerts: [], error: "", unreadable: 0 }
   var text = String(raw || "")
   if (responseTooLarge(text)) return { alerts: [], error: "NWS response exceeds size limit" }
   if (text.trim() === "") return { alerts: [], error: "empty NWS response" }
@@ -270,14 +298,20 @@ function parseCollection(raw) {
     var features = data.features
     if (!features || !features.length) return empty
     var alerts = []
+    var unreadable = 0
     for (var i = 0; i < features.length; i++) {
       var alert = normalizeAlert(features[i])
-      if (!alert) return { alerts: [], error: "unreadable NWS alert" }
+      if (!alert) {
+        unreadable++
+        continue
+      }
       if (alert.skip) continue
       alerts.push(alert)
     }
+    // Nothing readable is a failed check, not an empty one.
+    if (unreadable > 0 && alerts.length === 0) return { alerts: [], error: "unreadable NWS alert" }
     alerts.sort(compareAlerts)
-    return { alerts: alerts, error: "" }
+    return { alerts: alerts, error: "", unreadable: unreadable }
   } catch (e) {
     return { alerts: [], error: "unreadable NWS payload" }
   }
@@ -326,20 +360,39 @@ function normalizeAlert(feature) {
     description: String(properties.description || ""),
     instruction: String(properties.instruction || "").replace(/^\s+|\s+$/g, ""),
     area: String(properties.areaDesc || ""),
-    sent: String(properties.sent || ""),
-    onset: String(properties.onset || properties.effective || properties.sent || ""),
     expires: String(properties.expires || ""),
     ends: String(properties.ends || ""),
     response: String(properties.response || ""),
-    messageType: String(properties.messageType || ""),
     sender: String(properties.senderName || "").replace(/^\s+|\s+$/g, ""),
-    category: String(properties.category || ""),
+    threat: threatRank(properties),
     rings: rings,
     polygons: polygons,
     zoneUrls: extractZoneUrls(properties),
+    zoneTotal: allZoneUrls(properties).length,
+    zonesDrawn: 0,
     references: extractReferences(properties),
     geometryKind: kind
   }
+}
+
+// NWS keeps the event and severity when it raises a warning to "considerable"
+// or to an emergency. The damage threat tag is the only field that changes.
+var THREAT_RANK = { CONSIDERABLE: 1, DESTRUCTIVE: 2, CATASTROPHIC: 3 }
+
+function threatRank(properties) {
+  var parameters = properties && properties.parameters
+  if (!parameters || typeof parameters !== "object") return 0
+  var names = ["tornadoDamageThreat", "thunderstormDamageThreat", "flashFloodDamageThreat"]
+  var rank = 0
+  for (var i = 0; i < names.length; i++) {
+    var values = parameters[names[i]]
+    if (!values || !values.length) continue
+    for (var j = 0; j < values.length; j++) {
+      var key = String(values[j] || "").toUpperCase()
+      if (own(THREAT_RANK, key) && THREAT_RANK[key] > rank) rank = THREAT_RANK[key]
+    }
+  }
+  return rank
 }
 
 // Each NWS update is a new message with a new id. `references` names the
@@ -357,13 +410,13 @@ function extractReferences(properties) {
 }
 
 function eventIcon(event) {
-  if (EVENT_ICON[event]) return EVENT_ICON[event]
+  if (own(EVENT_ICON, event)) return EVENT_ICON[event]
   var text = String(event || "").toLowerCase()
   if (text.indexOf("tornado") !== -1) return ""
   if (text.indexOf("hurricane") !== -1 || text.indexOf("tropical") !== -1) return ""
   if (text.indexOf("thunder") !== -1) return ""
   if (text.indexOf("blizzard") !== -1) return ""
-  if (text.indexOf("ice") !== -1 || text.indexOf("freezing rain") !== -1) return ""
+  if (/\bice\b/.test(text) || text.indexOf("freezing rain") !== -1) return ""
   if (text.indexOf("snow") !== -1 || text.indexOf("winter") !== -1) return ""
   if (text.indexOf("flood") !== -1) return ""
   if (text.indexOf("heat") !== -1) return ""
@@ -377,15 +430,22 @@ function eventIcon(event) {
   return "󰀦"
 }
 
+// Outlines are fetched one zone at a time, so only this many are drawn.
+var ZONE_LIMIT = 24
+
 function extractZoneUrls(properties) {
+  return allZoneUrls(properties).slice(0, ZONE_LIMIT)
+}
+
+function allZoneUrls(properties) {
   var urls = []
   var seen = {}
   function add(url) {
     var value = String(url || "")
-    if (value.indexOf("https://api.weather.gov/zones/") !== 0) return
+    if (!/^https:\/\/api\.weather\.gov\/zones\/[a-z]+\/[A-Z0-9]+$/.test(value)) return
     if (seen[value]) return
     seen[value] = true
-    if (urls.length < 24) urls.push(value)
+    urls.push(value)
   }
   var zones = properties && properties.affectedZones
   if (zones && zones.length) {
@@ -404,9 +464,16 @@ function extractZoneUrls(properties) {
   return urls
 }
 
-function footprintCaption(kind) {
+// A watch can name more zones than are drawn, and outlines arrive one at a
+// time. The caption says so, so a partial shape is not read as the whole area.
+function footprintCaption(kind, drawn, total) {
   if (kind === "polygon") return "NWS storm-based polygon"
-  if (kind === "zone") return "NWS county / zone outline"
+  if (kind === "zone") {
+    var all = Number(total) || 0
+    var have = Number(drawn) || 0
+    if (all > have && have > 0) return "NWS county / zone outline · " + have + " of " + all + " zones drawn"
+    return "NWS county / zone outline"
+  }
   return "No footprint in this product"
 }
 
@@ -440,7 +507,7 @@ var WORD_ABBR = {
 var SHORT_LIMIT = 14
 
 function shortEvent(event) {
-  if (SHORT_EVENT[event]) return SHORT_EVENT[event]
+  if (own(SHORT_EVENT, event)) return SHORT_EVENT[event]
   var text = String(event || "").replace(/^\s+|\s+$/g, "")
   var match = text.match(/^(.*?)\s+(Warning|Watch|Advisory|Statement)$/i)
   var base = match ? match[1] : text
@@ -466,7 +533,7 @@ function fitLabel(words, tag) {
   while (joined().length > SHORT_LIMIT) {
     var longest = -1
     for (var i = 0; i < list.length; i++) {
-      if (!WORD_ABBR[list[i]]) continue
+      if (!own(WORD_ABBR, list[i])) continue
       if (longest === -1 || list[i].length > list[longest].length) longest = i
     }
     if (longest === -1) break
@@ -481,7 +548,11 @@ function fitLabel(words, tag) {
 function compareAlerts(a, b) {
   if (b.rank !== a.rank) return b.rank - a.rank
   if (b.urgencyRank !== a.urgencyRank) return b.urgencyRank - a.urgencyRank
-  if (a.expires && b.expires && a.expires !== b.expires) return a.expires < b.expires ? -1 : 1
+  // Offices in different time zones write different UTC offsets, so compare
+  // instants and not text.
+  var aEnds = Date.parse(a.expires || "")
+  var bEnds = Date.parse(b.expires || "")
+  if (isFinite(aEnds) && isFinite(bEnds) && aEnds !== bEnds) return aEnds < bEnds ? -1 : 1
   if (a.event !== b.event) return a.event < b.event ? -1 : 1
   return a.id < b.id ? -1 : 1
 }
@@ -514,8 +585,8 @@ var EMERGENCY_PRODUCTS = {
 
 function eventClass(event) {
   var name = String(event || "")
-  if (WARNING_FOLLOWUPS[name]) return "warning"
-  if (EMERGENCY_PRODUCTS[name] || /Emergency$/i.test(name)) return "warning"
+  if (own(WARNING_FOLLOWUPS, name)) return "warning"
+  if (own(EMERGENCY_PRODUCTS, name) || /Emergency$/i.test(name)) return "warning"
   if (/Warning$/i.test(name)) return "warning"
   if (/Watch$/i.test(name)) return "watch"
   return "advisory"
@@ -529,12 +600,14 @@ function familyOf(event) {
   if (text.indexOf("thunder") !== -1 || text.indexOf("severe weather statement") !== -1) return "thunderstorm"
   if (text.indexOf("flash flood") !== -1) return "flashflood"
   if (text.indexOf("flood") !== -1 || text.indexOf("surge") !== -1) return "flood"
-  if (text.indexOf("winter") !== -1 || text.indexOf("ice") !== -1 || text.indexOf("blizzard") !== -1 || text.indexOf("snow") !== -1 || text.indexOf("freezing") !== -1) return "winter"
+  if (text.indexOf("winter") !== -1 || /\bice\b/.test(text) || text.indexOf("blizzard") !== -1 || text.indexOf("snow") !== -1 || text.indexOf("freezing") !== -1) return "winter"
   if (text.indexOf("heat") !== -1) return "heat"
   if (text.indexOf("cold") !== -1 || text.indexOf("chill") !== -1 || text.indexOf("freeze") !== -1 || text.indexOf("frost") !== -1) return "cold"
   if (text.indexOf("fire") !== -1 || text.indexOf("red flag") !== -1) return "fire"
   if (text.indexOf("hurricane") !== -1 || text.indexOf("tropical") !== -1 || text.indexOf("typhoon") !== -1) return "tropical"
   if (text.indexOf("wind") !== -1 || text.indexOf("dust") !== -1) return "wind"
+  // Marine wind products that do not say "wind".
+  if (text.indexOf("gale") !== -1 || /^storm (warning|watch)$/.test(text)) return "wind"
   if (text.indexOf("fog") !== -1 || text.indexOf("smoke") !== -1) return "fog"
   return "other"
 }
@@ -608,7 +681,7 @@ function filterAlerts(alerts, filter) {
 
 function shouldNotify(alert, seen, firstLoad) {
   if (!alert || !alert.id) return false
-  if (seen && seen[alert.id]) return false
+  if (own(seen, alert.id)) return false
   if (continuesSeen(alert, seen)) return false
   // The first check only interrupts for a warning that needs action now.
   // Expected/Future urgency does not interrupt on startup.
@@ -626,16 +699,25 @@ function noticeUrgency(alert) {
 }
 
 // An update to an alert we already announced stays quiet unless it changes
-// the event (a watch upgraded to a warning) or raises the severity.
+// the event (a watch upgraded to a warning) or raises the severity, the
+// urgency, or the damage threat. It is compared with the message it replaced
+// most recently, so a warning that eases and then worsens again still notifies.
 function continuesSeen(alert, seen) {
   if (!alert || !seen) return false
   var refs = alert.references || []
+  var prior = null
   for (var i = 0; i < refs.length; i++) {
-    var prior = seen[refs[i]]
-    if (!prior || typeof prior !== "object") continue
-    if (prior.event === alert.event && Number(alert.rank) <= Number(prior.rank)) return true
+    if (!own(seen, refs[i])) continue
+    var entry = seen[refs[i]]
+    if (!entry || typeof entry !== "object" || !entry.event) continue
+    if (prior === null || entry.at > prior.at
+        || (entry.at === prior.at && Number(entry.rank) > Number(prior.rank))) prior = entry
   }
-  return false
+  if (prior === null) return false
+  return prior.event === alert.event
+    && (Number(alert.rank) || 0) <= Number(prior.rank)
+    && (Number(alert.urgencyRank) || 0) <= Number(prior.urgency)
+    && (Number(alert.threat) || 0) <= Number(prior.threat)
 }
 
 function unexpired(alerts, nowMs) {
@@ -653,7 +735,9 @@ function unexpired(alerts, nowMs) {
 }
 
 // Seen entries record when an alert was seen and what it was, so a later
-// update can be compared with it. Older files stored only the time.
+// update can be compared with it. Older files stored only the time, or left
+// out urgency and threat; those read as the highest value so an upgrade of the
+// plugin does not re-announce alerts that were already seen.
 function seenTime(entry) {
   if (entry && typeof entry === "object") return Number(entry.at)
   return Number(entry)
@@ -663,10 +747,21 @@ function seenEntry(value) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     var at = Number(value.at)
     if (!isFinite(at)) return null
-    return { at: at, event: String(value.event || ""), rank: Number(value.rank) || 0 }
+    return {
+      at: at,
+      event: String(value.event || ""),
+      rank: Number(value.rank) || 0,
+      urgency: knownLevel(value.urgency),
+      threat: knownLevel(value.threat)
+    }
   }
   var stamp = Number(value)
-  return isFinite(stamp) ? { at: stamp, event: "", rank: 0 } : null
+  return isFinite(stamp) ? { at: stamp, event: "", rank: 0, urgency: 3, threat: 3 } : null
+}
+
+function knownLevel(value) {
+  if (typeof value !== "number" || !isFinite(value)) return 3
+  return value
 }
 
 function mergeSeen(seen, alerts, nowMs, maxAgeMs) {
@@ -686,11 +781,27 @@ function mergeSeen(seen, alerts, nowMs, maxAgeMs) {
       next[alert.id] = {
         at: isFinite(now) ? now : Date.now(),
         event: String(alert.event || ""),
-        rank: Number(alert.rank) || 0
+        rank: Number(alert.rank) || 0,
+        urgency: Number(alert.urgencyRank) || 0,
+        threat: Number(alert.threat) || 0
       }
     }
   }
   return next
+}
+
+// What the seen-file holds apart from the times. The file is rewritten when
+// this changes, and otherwise only now and then to keep the times fresh.
+function seenSignature(seen) {
+  var keys = []
+  if (seen && typeof seen === "object") {
+    for (var key in seen) {
+      var entry = seen[key] || {}
+      keys.push([key, entry.event, entry.rank, entry.urgency, entry.threat].join("|"))
+    }
+  }
+  keys.sort()
+  return keys.join("\n")
 }
 
 function parseSeen(raw) {
@@ -721,7 +832,7 @@ function extractPolygons(geometry) {
   if (!geometry || typeof geometry !== "object") return []
   var type = String(geometry.type || "")
   var coordinates = geometry.coordinates
-  if (!coordinates) return []
+  if (!coordinates && type !== "GeometryCollection") return []
   if (type === "Polygon") {
     var rings = polygonRings(coordinates)
     return rings.length > 0 ? [rings] : []
@@ -733,6 +844,15 @@ function extractPolygons(geometry) {
       if (part.length > 0) polygons.push(part)
     }
     return polygons
+  }
+  // Some county outlines arrive as a collection of polygons and multipolygons.
+  if (type === "GeometryCollection" && geometry.geometries && geometry.geometries.length) {
+    var collected = []
+    for (var g = 0; g < geometry.geometries.length; g++) {
+      var member = extractPolygons(geometry.geometries[g])
+      for (var m = 0; m < member.length; m++) collected.push(member[m])
+    }
+    return collected
   }
   return []
 }
@@ -898,14 +1018,42 @@ function pointInRings(lon, lat, rings) {
   return pointInPolygons(lon, lat, [rings])
 }
 
+// Each polygon is tested only against the cells under its own bounding box,
+// so a county made of hundreds of small islands costs little.
 function rasterCells(polygons, bounds, columns, rows) {
   var cells = []
   if (!bounds || columns < 1 || rows < 1 || !polygons) return cells
-  for (var row = 0; row < rows; row++) {
-    for (var col = 0; col < columns; col++) {
-      var geo = unproject(col + 0.5, row + 0.5, bounds, columns, rows)
-      if (geo && pointInPolygons(geo.lon, geo.lat, polygons)) cells.push(row * columns + col)
+  var filled = {}
+  for (var i = 0; i < polygons.length; i++) {
+    var polygon = polygons[i]
+    var outer = polygon && polygon[0]
+    if (!outer || outer.length < 3) continue
+    var minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity
+    for (var p = 0; p < outer.length; p++) {
+      if (outer[p][0] < minLon) minLon = outer[p][0]
+      if (outer[p][0] > maxLon) maxLon = outer[p][0]
+      if (outer[p][1] < minLat) minLat = outer[p][1]
+      if (outer[p][1] > maxLat) maxLat = outer[p][1]
     }
+    var topLeft = project(minLon, maxLat, bounds, columns, rows)
+    var bottomRight = project(maxLon, minLat, bounds, columns, rows)
+    if (!topLeft || !bottomRight) continue
+    var col0 = Math.max(0, Math.floor(topLeft.x))
+    var col1 = Math.min(columns - 1, Math.floor(bottomRight.x))
+    var row0 = Math.max(0, Math.floor(topLeft.y))
+    var row1 = Math.min(rows - 1, Math.floor(bottomRight.y))
+    var single = [polygon]
+    for (var row = row0; row <= row1; row++) {
+      for (var col = col0; col <= col1; col++) {
+        var key = row * columns + col
+        if (filled[key]) continue
+        var geo = unproject(col + 0.5, row + 0.5, bounds, columns, rows)
+        if (geo && pointInPolygons(geo.lon, geo.lat, single)) filled[key] = true
+      }
+    }
+  }
+  for (var index = 0; index < columns * rows; index++) {
+    if (filled[index]) cells.push(index)
   }
   return cells
 }
@@ -942,12 +1090,36 @@ function simplifyRing(ring, maxPoints) {
   return out
 }
 
+// An island county can hold hundreds of polygons, most smaller than one map
+// cell. Keep the largest ones.
+var ZONE_POLYGON_LIMIT = 64
+
+function largestPolygons(polygons, limit) {
+  if (polygons.length <= limit) return polygons
+  var sized = []
+  for (var i = 0; i < polygons.length; i++) {
+    var outer = polygons[i][0]
+    var minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity
+    for (var p = 0; p < outer.length; p++) {
+      if (outer[p][0] < minLon) minLon = outer[p][0]
+      if (outer[p][0] > maxLon) maxLon = outer[p][0]
+      if (outer[p][1] < minLat) minLat = outer[p][1]
+      if (outer[p][1] > maxLat) maxLat = outer[p][1]
+    }
+    sized.push({ polygon: polygons[i], area: (maxLon - minLon) * (maxLat - minLat) })
+  }
+  sized.sort(function(a, b) { return b.area - a.area })
+  var out = []
+  for (var k = 0; k < limit; k++) out.push(sized[k].polygon)
+  return out
+}
+
 function parseZoneDocument(raw) {
   var text = String(raw || "")
-  if (responseTooLarge(text)) return []
+  if (responseTooLarge(text, zoneByteLimit())) return []
   try {
     var data = JSON.parse(text)
-    var polygons = extractPolygons(data && data.geometry)
+    var polygons = largestPolygons(extractPolygons(data && data.geometry), ZONE_POLYGON_LIMIT)
     var out = []
     for (var i = 0; i < polygons.length; i++) {
       var simplified = []
@@ -988,11 +1160,14 @@ function attachZoneRings(alerts, cache) {
     if (alert.geometryKind !== "zone" && ((alert.polygons && alert.polygons.length > 0) || (alert.rings && alert.rings.length > 0))) continue
     var urls = alert.zoneUrls || []
     var polygons = []
+    var drawn = 0
     for (var j = 0; j < urls.length; j++) {
-      var got = cache && cache[urls[j]]
+      var got = own(cache, urls[j]) ? cache[urls[j]] : null
       if (!got) continue
+      drawn++
       for (var k = 0; k < got.length; k++) polygons.push(got[k])
     }
+    alert.zonesDrawn = drawn
     if (polygons.length > 0) {
       alert.polygons = polygons
       alert.rings = flattenPolygons(polygons)
@@ -1002,7 +1177,23 @@ function attachZoneRings(alerts, cache) {
   return alerts
 }
 
-function missingZoneUrls(alerts, cache) {
+// A zone that failed is asked for again after 5 minutes, then 10, 20, and so
+// on up to 6 hours, so one that never loads is not downloaded on every check.
+function zoneRetryDelayMs(failures) {
+  var count = Math.max(1, Number(failures) || 1)
+  return Math.min(300000 * Math.pow(2, Math.min(count - 1, 10)), 21600000)
+}
+
+function noteZoneFailure(failures, url, nowMs) {
+  var next = {}
+  for (var key in failures) next[key] = failures[key]
+  var count = (own(next, url) ? next[url].count : 0) + 1
+  next[url] = { count: count, retryAt: Number(nowMs) + zoneRetryDelayMs(count) }
+  return next
+}
+
+// `failures` and `nowMs` are optional; without them every uncached zone is due.
+function missingZoneUrls(alerts, cache, failures, nowMs) {
   var urls = []
   var seen = {}
   if (!alerts) return urls
@@ -1012,7 +1203,8 @@ function missingZoneUrls(alerts, cache) {
     var list = alert.zoneUrls || []
     for (var j = 0; j < list.length; j++) {
       var url = list[j]
-      if (!url || seen[url] || (cache && cache[url])) continue
+      if (!url || seen[url] || own(cache, url)) continue
+      if (own(failures, url) && failures[url].retryAt > Number(nowMs)) continue
       seen[url] = true
       urls.push(url)
     }
@@ -1053,6 +1245,21 @@ function edgeCells(rings, bounds, columns, rows) {
   return cells
 }
 
+// "Clear" is only true for as long as checks keep landing. Three missed
+// intervals means the last answer is too old to stand behind.
+function isStale(lastSuccessMs, nowMs, refreshMs) {
+  var last = Number(lastSuccessMs)
+  var now = Number(nowMs)
+  if (!(last > 0) || !isFinite(now)) return false
+  return now - last > 3 * Math.max(30000, Number(refreshMs) || 60000) + 30000
+}
+
+function clampRefreshSeconds(value) {
+  var seconds = parseInt(value, 10)
+  if (!isFinite(seconds) || seconds <= 0) seconds = 60
+  return Math.min(86400, Math.max(30, seconds))
+}
+
 function userAgent() {
   return "(AcidAlerts, https://github.com/neilofneils404/acid-alerts)"
 }
@@ -1065,6 +1272,14 @@ if (typeof module !== "undefined" && module.exports) {
     alertsUrl: alertsUrl,
     responseByteLimit: responseByteLimit,
     responseTooLarge: responseTooLarge,
+    zoneByteLimit: zoneByteLimit,
+    coordinate: coordinate,
+    threatRank: threatRank,
+    seenSignature: seenSignature,
+    zoneRetryDelayMs: zoneRetryDelayMs,
+    noteZoneFailure: noteZoneFailure,
+    isStale: isStale,
+    clampRefreshSeconds: clampRefreshSeconds,
     parseCollection: parseCollection,
     outsideCoverage: outsideCoverage,
     normalizeAlert: normalizeAlert,

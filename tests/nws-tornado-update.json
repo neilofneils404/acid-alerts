@@ -1,0 +1,140 @@
+{
+  "@context": [
+    "https://geojson.org/geojson-ld/geojson-context.jsonld",
+    {
+      "@version": "1.1",
+      "wx": "https://api.weather.gov/ontology#",
+      "@vocab": "https://api.weather.gov/ontology#"
+    }
+  ],
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.4ed52b5a7023ea2e9d6e269559b0097efafc23d3.002.1",
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -83.79,
+              33.28
+            ],
+            [
+              -83.83,
+              33.3
+            ],
+            [
+              -83.82,
+              33.35
+            ],
+            [
+              -83.77,
+              33.36
+            ],
+            [
+              -83.75,
+              33.32
+            ],
+            [
+              -83.79,
+              33.28
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.4ed52b5a7023ea2e9d6e269559b0097efafc23d3.002.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.4ed52b5a7023ea2e9d6e269559b0097efafc23d3.002.1",
+        "areaDesc": "Jasper, GA",
+        "geocode": {
+          "SAME": [
+            "013159"
+          ],
+          "UGC": [
+            "GAC159"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/county/GAC159"
+        ],
+        "references": [
+          {
+            "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.3656520f51b47bd58be85f1707d42c7ce50d3ac8.001.1",
+            "identifier": "urn:oid:2.49.0.1.840.0.3656520f51b47bd58be85f1707d42c7ce50d3ac8.001.1",
+            "sender": "w-nws.webmaster@noaa.gov",
+            "sent": "2026-10-10T21:11:00-04:00"
+          }
+        ],
+        "sent": "2026-10-10T21:20:00-04:00",
+        "effective": "2026-10-10T21:20:00-04:00",
+        "onset": "2026-10-10T21:20:00-04:00",
+        "expires": "2026-10-10T21:30:00-04:00",
+        "ends": "2026-10-10T21:30:00-04:00",
+        "status": "Actual",
+        "messageType": "Update",
+        "category": "Met",
+        "severity": "Extreme",
+        "certainty": "Observed",
+        "urgency": "Immediate",
+        "event": "Tornado Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS Peachtree City GA",
+        "headline": "Tornado Warning issued October 10 at 9:20PM EDT until October 10 at 9:30PM EDT by NWS Peachtree City GA",
+        "description": "At 920 PM EDT, a severe thunderstorm capable of producing a tornado\nwas located near Turtle Cove, or near Monticello, moving northeast at\n25 mph.\n\nHAZARD...Tornado.\n\nSOURCE...Radar indicated rotation.\n\nIMPACT...Flying debris will be dangerous to those caught without\nshelter. Mobile homes will be damaged or destroyed. Damage\nto roofs, windows, and vehicles will occur.  Tree damage is\nlikely.",
+        "instruction": "TAKE COVER NOW! Move to a basement or an interior room on the lowest\nfloor of a sturdy building. Avoid windows. If you are outdoors, in a\nmobile home, or in a vehicle, move to the closest substantial shelter\nand protect yourself from flying debris.",
+        "response": "Shelter",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "SVSFFC"
+          ],
+          "WMOidentifier": [
+            "WWUS52 KFFC 110120"
+          ],
+          "NWSheadline": [
+            "A TORNADO WARNING REMAINS IN EFFECT UNTIL 930 PM EDT FOR WEST CENTRAL JASPER COUNTY"
+          ],
+          "eventMotionDescription": [
+            "2026-10-11T01:20:00-00:00...storm...209DEG...23KT...33.32,-83.79"
+          ],
+          "maxHailSize": [
+            "0.00"
+          ],
+          "tornadoDetection": [
+            "RADAR INDICATED"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM",
+            "CMAS"
+          ],
+          "EAS-ORG": [
+            "WXR"
+          ],
+          "VTEC": [
+            "/O.CON.KFFC.TO.W.0032.000000T0000Z-261011T0130Z/"
+          ],
+          "eventEndingTime": [
+            "2026-10-10T21:30:00-04:00"
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "SVS"
+          ],
+          "NationalWeatherService": [
+            "TOW"
+          ]
+        }
+      }
+    }
+  ],
+  "title": "Current watches, warnings, and advisories",
+  "updated": "2026-10-11T01:26:58+00:00"
+}

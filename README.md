@@ -46,7 +46,7 @@ One background service checks NWS and sends notifications for all of your monito
 
 View full-size panels: [Tornado warning](docs/media/tornado.png) · [Ice storm warning](docs/media/ice-storm.png) · [Winter storm watch](docs/media/winter-watch.png)
 
-In live mode, the plugin requests active NWS alerts for your location and applies your filters. Storm-based products can show the polygon issued by the forecast office; county- and zone-based products use NWS boundary outlines. If more than one alert is active, the bar names the most dangerous one and shows the count. Open the panel to move through the rest. The map frames the selected alert, so a storm polygon stays readable when a watch covers the whole county. Filters collapse while an alert is open to leave more room for the instruction and the full NWS description.
+In live mode, the plugin requests active NWS alerts for your location and applies your filters. Storm-based products can show the polygon issued by the forecast office; county- and zone-based products use NWS boundary outlines. Outlines load one zone at a time, up to 24 per alert; when an alert names more zones than are drawn, the caption says so, such as **24 of 40 zones drawn**. If more than one alert is active, the bar names the most dangerous one and shows the count. Open the panel to move through the rest. The map frames the selected alert, so a storm polygon stays readable when a watch covers the whole county. Filters collapse while an alert is open to leave more room for the instruction and the full NWS description.
 
 <p align="center">
   <img src="docs/media/multiple-alerts.png" alt="Cleveland demo with a tornado warning, winter storm watch, and flood advisory; the map frames the selected warning" width="420" />
@@ -81,8 +81,8 @@ Change alert filters in the panel, or edit the Acid Alerts widget entry in `~/.c
 | `showWatches` | `false` | Include watches. |
 | `showAdvisories` | `false` | Include advisories and other lower-tier products. |
 | `families` | `[]` | Include all weather families, or limit to the selected families below. |
-| `refreshSeconds` | `60` | Seconds between checks; minimum `30`. |
-| `latitude` / `longitude` / `name` | Omarchy weather location | Override the plugin location without changing your weather settings. |
+| `refreshSeconds` | `60` | Seconds between checks; minimum `30`, maximum `86400`. |
+| `latitude` / `longitude` / `name` | Omarchy weather location | Override the plugin location without changing your weather settings. Both coordinates are needed; a blank or missing one leaves the weather location in use. |
 | `hideWhenClear` | `false` | Hide the bar mark after a successful check with nothing to show. Unavailable data, hidden alerts, and demo mode stay visible. |
 | `demo` | `false` | Show sample alerts instead of live data. The bar labels these `DEMO`. |
 
@@ -111,9 +111,11 @@ omarchy plugin remove neil.acid-alerts
 
 ## Weather safety
 
-Acid Alerts is an independent desktop plugin that displays official NWS data in live mode. It is not an official NWS product, and it cannot guarantee delivery of every alert. Network outages, a sleeping computer, filters, and polling delays can prevent or delay an alert. On first load, only previously unseen Severe or Extreme warning products with Immediate urgency can notify. On subsequent checks, unseen Severe or Extreme alerts, or Moderate alerts with Immediate urgency, can notify if they match your filters. NWS updates to an alert that was already seen stay quiet unless the event changes, such as a watch upgraded to a warning, or the severity rises.
+Acid Alerts is an independent desktop plugin that displays official NWS data in live mode. It is not an official NWS product, and it cannot guarantee delivery of every alert. Network outages, a sleeping computer, filters, and polling delays can prevent or delay an alert. On first load, only previously unseen Severe or Extreme warning products with Immediate urgency can notify. On subsequent checks, unseen Severe or Extreme alerts, or Moderate alerts with Immediate urgency, can notify if they match your filters. NWS updates to an alert that was already seen stay quiet unless the event changes, such as a watch upgraded to a warning, or the severity, urgency, or damage threat rises, such as a tornado warning raised to a tornado emergency.
 
 The panel shows **ALERTS UNAVAILABLE** when a check fails and there is nothing current to show. The bar reads **NO DATA** in that case, rather than the idle diamond. Previously loaded alerts remain visible, with a last-known-data notice, until each message's expiration time. Expiration is checked every second while cached alerts are shown during an outage. After expiration they leave the bar, and the panel says the previous alerts have expired. **NO MATCHING ALERTS** means a successful check found nothing matching your filters. If alerts are in but hidden, the bar shows the hidden count, such as **2 HIDDEN**, instead of looking clear.
+
+A check that has not finished after 15 seconds is abandoned and counted as failed. If no check has succeeded for three refresh intervals, for example after the computer wakes from sleep, the bar reads **NO DATA** until one does. If part of an NWS response cannot be read, the readable alerts are shown and the panel footer says how many were left out.
 
 Test, exercise, and cancelled products are ignored. Notification decisions use NWS severity and urgency fields; a warning with Immediate urgency can notify on startup even if it was issued before the plugin started.
 
@@ -123,7 +125,7 @@ Test, exercise, and cancelled products are ignored. Notification decisions use N
 
 Bug reports, clearer documentation, and improvements to alert handling are welcome. [Open an issue](https://github.com/neilofneils404/acid-alerts/issues) with your Omarchy version, what happened, and what you expected. Remove precise location details from logs or screenshots before sharing them.
 
-NWS alert and zone transfers are capped at 1 MiB each, including responses without a Content-Length header (requires curl 8.4.0+). Failed or truncated transfers are discarded before parsing; the parsers also check the UTF-8 byte limit. Failed zone responses are not cached. Curl runs with its default config disabled so local curl options cannot override these bounds.
+NWS alert transfers are capped at 1 MiB and zone outlines at 4 MiB, including responses without a Content-Length header (requires curl 8.4.0+). Failed or truncated transfers are discarded before parsing; the parsers also check the UTF-8 byte limit. Failed zone responses are not cached, and a zone that fails is asked for again after 5 minutes, doubling up to 6 hours. Curl runs with its default config disabled so local curl options cannot override these bounds, accepts only HTTPS, and fetches only `api.weather.gov` zone paths. The alert request sends your location rounded to four decimal places.
 
 The model, panel state, and local HTTP transfer regression tests run with Node.js and curl:
 
@@ -132,6 +134,8 @@ node tests/test-model.js
 node tests/test-panel-state.js
 node tests/test-response-limits.js
 ```
+
+`scripts/lint-qml.sh` checks the QML with Qt 6 `qmllint`. Both run in CI, which also checks that a release tag matches the version in `manifest.json`.
 
 Brand assets, editable SVG sources, and rendering instructions are documented in [branding/README.md](branding/README.md).
 

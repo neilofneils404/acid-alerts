@@ -54,6 +54,13 @@ Item {
   property bool seenRetryDone: false
   property int zoneGeneration: 0
   property int zoneRequestGeneration: -1
+  // Zones that failed to load, with the time each may be asked for again.
+  property var zoneFailures: ({})
+  // Features in the last response that could not be read.
+  property int unreadableCount: 0
+  property double lastSuccessMs: 0
+  property string seenWritten: ""
+  property double seenWrittenMs: 0
 
   readonly property var location: Model.parseLocation(root.locationRaw, root.settings)
   readonly property bool located: Model.hasCoordinates(location)
@@ -95,7 +102,15 @@ Item {
     return "Acid Alerts · " + root.heroMeta()
   }
   readonly property var mapLayers: Model.mapLayers(alerts, selected ? selected.id : "")
-  readonly property int refreshMs: Math.max(30000, (parseInt(setting("refreshSeconds", 60), 10) || 60) * 1000)
+  // Outlines are attached to the alert in place as zones arrive. Reading
+  // `alerts`, which is replaced each time, keeps this caption current.
+  readonly property string footprintCaption: {
+    var list = root.alerts
+    var current = root.selected
+    if (!current || !list) return ""
+    return Model.footprintCaption(current.geometryKind, current.zonesDrawn, current.zoneTotal)
+  }
+  readonly property int refreshMs: Model.clampRefreshSeconds(setting("refreshSeconds", 60)) * 1000
   readonly property bool demoMode: Demo.demoEnabled(root.settings)
   readonly property var filter: Model.parseFilter(root.settings)
   readonly property bool filteredOut: !demoMode && !heldExpired && incomingAlerts.length > 0 && alertCount === 0
@@ -139,6 +154,7 @@ Item {
     root.requestExitCode = -1
     fetchProc.command = [
       "curl", "-q", "-sS", "--fail-with-body", "--max-time", "10",
+      "--globoff", "--proto", "=https",
       "--max-filesize", String(Model.responseByteLimit()),
       "-A", Model.userAgent(),
       "-H", "Accept: application/geo+json",
@@ -146,6 +162,42 @@ Item {
     ]
     root.fetchInFlight = true
     fetchProc.running = true
+  }
+
+  // A process that cannot start reports neither an exit nor an end of output,
+  // so nothing would ever clear the in-flight flag and polling would stop.
+  function abandonFetch() {
+    if (!root.fetchInFlight) return
+    root.fetchInFlight = false
+    root.responseBody = ""
+    if (fetchProc.running) fetchProc.running = false
+    if (root.requestGeneration !== root.fetchGeneration) {
+      Qt.callLater(root.refresh)
+      return
+    }
+    root.fetchError = "NWS check did not finish"
+    root.applyVisible()
+  }
+
+  function abandonZoneFetch() {
+    if (!root.zoneFetchInFlight) return
+    root.zoneFetchInFlight = false
+    root.zoneResponseBody = ""
+    if (zoneProc.running) zoneProc.running = false
+    if (root.zoneRequestGeneration === root.zoneGeneration)
+      root.zoneFailures = Model.noteZoneFailure(root.zoneFailures, root.zoneFetchUrl, Date.now())
+    Qt.callLater(root.pumpZones)
+  }
+
+  // Checks can stop landing without any of them failing, such as across a
+  // suspend. Say so, and ask again, when the last answer is too old.
+  function noteStaleness() {
+    if (root.demoMode || !root.located || root.outsideCoverage) return
+    if (!root.hasSuccessfulFetch || root.fetchError !== "") return
+    if (!Model.isStale(root.lastSuccessMs, Date.now(), root.refreshMs)) return
+    root.fetchError = "No recent NWS check"
+    root.applyVisible()
+    root.refresh()
   }
 
   // Invalidate results when switching locations or entering/leaving demo mode.
@@ -158,6 +210,8 @@ Item {
     root.fetchError = ""
     root.heldExpired = false
     root.outsideCoverage = false
+    root.unreadableCount = 0
+    root.lastSuccessMs = 0
     root.incomingAlerts = []
     root.alerts = []
     root.selectedId = ""
@@ -198,6 +252,7 @@ Item {
       features: scene.features
     }))
     root.fetchError = ""
+    root.unreadableCount = 0
     root.incomingAlerts = parsed.alerts
     root.applyVisible()
     root.lastUpdated = "demo"
@@ -224,9 +279,11 @@ Item {
     root.fetchError = ""
     root.heldExpired = false
     Model.attachZoneRings(parsed.alerts, root.zoneCache)
+    root.unreadableCount = parsed.unreadable || 0
     root.incomingAlerts = parsed.alerts
     root.applyVisible()
     root.hasSuccessfulFetch = true
+    root.lastSuccessMs = Date.now()
     root.lastUpdated = Qt.formatDateTime(new Date(), "MMM d h:mm AP")
     if (root.seenHydrated) {
       notifyNewAlerts(root.alerts)
@@ -290,7 +347,7 @@ Item {
   }
 
   function enqueueZones(nextAlerts) {
-    var missing = Model.missingZoneUrls(nextAlerts, root.zoneCache)
+    var missing = Model.missingZoneUrls(nextAlerts, root.zoneCache, root.zoneFailures, Date.now())
     if (missing.length === 0) return
     var queue = root.zoneQueue.slice()
     for (var i = 0; i < missing.length; i++) {
@@ -315,7 +372,8 @@ Item {
     root.zoneFetchInFlight = true
     zoneProc.command = [
       "curl", "-q", "-fsS", "--max-time", "10",
-      "--max-filesize", String(Model.responseByteLimit()),
+      "--globoff", "--proto", "=https",
+      "--max-filesize", String(Model.zoneByteLimit()),
       "-A", Model.userAgent(),
       "-H", "Accept: application/geo+json",
       url
@@ -333,14 +391,16 @@ Item {
       Qt.callLater(root.pumpZones)
       return
     }
-    if (root.zoneRequestExitCode === 0 && !root.demoMode)
-      root.applyZonePayload(body)
+    if (root.demoMode) return
+    if (root.zoneRequestExitCode !== 0 || !root.applyZonePayload(body))
+      root.zoneFailures = Model.noteZoneFailure(root.zoneFailures, root.zoneFetchUrl, Date.now())
     Qt.callLater(root.pumpZones)
   }
 
+  // False when the response held no outline to draw.
   function applyZonePayload(raw) {
     var rings = Model.parseZoneDocument(raw)
-    if (rings.length === 0) return
+    if (rings.length === 0) return false
     var nextCache = {}
     for (var key in root.zoneCache) nextCache[key] = root.zoneCache[key]
     nextCache[root.zoneFetchUrl] = rings
@@ -349,6 +409,7 @@ Item {
     Model.attachZoneRings(next, root.zoneCache)
     root.incomingAlerts = next
     root.applyVisible()
+    return true
   }
 
   function notifyNewAlerts(nextAlerts) {
@@ -361,7 +422,14 @@ Item {
   }
 
   function persistSeen(nextAlerts) {
-    root.seen = Model.mergeSeen(root.seen, nextAlerts, Date.now(), 172800000)
+    var now = Date.now()
+    root.seen = Model.mergeSeen(root.seen, nextAlerts, now, 172800000)
+    // Every check refreshes the times. Write when an alert came or went, and
+    // otherwise hourly, which is often enough for the two-day expiry.
+    var signature = Model.seenSignature(root.seen)
+    if (signature === root.seenWritten && now - root.seenWrittenMs < 3600000) return
+    root.seenWritten = signature
+    root.seenWrittenMs = now
     seenFile.setText(Model.serializeSeen(root.seen) + "\n")
   }
 
@@ -446,10 +514,11 @@ Item {
     }
     if (!root.hasSuccessfulFetch) return "Waiting for NWS data for " + locationLabel()
     // A routine refresh must not replace what the panel already knows.
-    if (root.filteredOut) return root.incomingAlerts.length + " in " + locationLabel() + ", hidden by filters"
+    var unread = root.unreadableNote() !== "" ? " · " + root.unreadableNote() : ""
+    if (root.filteredOut) return root.incomingAlerts.length + " in " + locationLabel() + ", hidden by filters" + unread
     if (root.alertCount === 0) {
       if (root.fetchInFlight) return "Checking NWS for " + locationLabel()
-      return "No alerts match your filters in " + locationLabel()
+      return "No alerts match your filters in " + locationLabel() + unread
     }
     var bits = []
     if (root.alertCount > 1)
@@ -464,6 +533,11 @@ Item {
     return bits.join(" · ")
   }
 
+  function unreadableNote() {
+    if (root.unreadableCount <= 0 || root.demoMode) return ""
+    return String(root.unreadableCount) + (root.unreadableCount === 1 ? " alert" : " alerts") + " could not be read"
+  }
+
   function footerText() {
     if (root.demoMode) {
       var n = root.demoScenes.length
@@ -472,6 +546,7 @@ Item {
     }
     if (root.located)
       return "NWS · " + locationLabel() + (root.lastUpdated !== "" ? " · last checked " + root.lastUpdated : "")
+        + (root.unreadableNote() !== "" ? " · " + root.unreadableNote() : "")
     return "NWS · set a location with omarchy-weather-location"
   }
 
@@ -539,6 +614,29 @@ Item {
     running: root.configured
     repeat: true
     onTriggered: if (!root.outsideCoverage) root.refresh()
+  }
+
+  // curl gives up after 10 seconds. Anything still in flight after 15 never
+  // started or will never report back.
+  Timer {
+    interval: 15000
+    running: root.fetchInFlight
+    repeat: false
+    onTriggered: root.abandonFetch()
+  }
+
+  Timer {
+    interval: 15000
+    running: root.zoneFetchInFlight
+    repeat: false
+    onTriggered: root.abandonZoneFetch()
+  }
+
+  Timer {
+    interval: 10000
+    running: root.configured && root.hasSuccessfulFetch && !root.demoMode
+    repeat: true
+    onTriggered: root.noteStaleness()
   }
 
   // Expiration must not wait for another (possibly very infrequent) poll.

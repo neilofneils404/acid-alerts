@@ -1,0 +1,101 @@
+{
+  "@context": [
+    "https://geojson.org/geojson-ld/geojson-context.jsonld",
+    {
+      "@version": "1.1",
+      "wx": "https://api.weather.gov/ontology#",
+      "@vocab": "https://api.weather.gov/ontology#"
+    }
+  ],
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.00559dfdbd9fa57f28e89159c1749d503be23263.001.1",
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.00559dfdbd9fa57f28e89159c1749d503be23263.001.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.00559dfdbd9fa57f28e89159c1749d503be23263.001.1",
+        "areaDesc": "Central Interior Cumberland; Androscoggin",
+        "geocode": {
+          "SAME": [
+            "023005",
+            "023001"
+          ],
+          "UGC": [
+            "MEZ019",
+            "MEZ020"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/forecast/MEZ019",
+          "https://api.weather.gov/zones/forecast/MEZ020"
+        ],
+        "references": [
+          {
+            "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.4eab3c76ee9468d05a9f9793700fd8e9328617f3.001.1",
+            "identifier": "urn:oid:2.49.0.1.840.0.4eab3c76ee9468d05a9f9793700fd8e9328617f3.001.1",
+            "sender": "w-nws.webmaster@noaa.gov",
+            "sent": "2026-10-10T02:02:00-04:00"
+          }
+        ],
+        "sent": "2026-10-10T14:37:00-04:00",
+        "effective": "2026-10-10T14:37:00-04:00",
+        "onset": "2026-10-11T02:00:00-04:00",
+        "expires": "2026-10-11T02:45:00-04:00",
+        "ends": "2026-10-11T08:00:00-04:00",
+        "status": "Actual",
+        "messageType": "Update",
+        "category": "Met",
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Expected",
+        "event": "Freeze Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS Gray ME",
+        "headline": "Freeze Warning issued October 10 at 2:37PM EDT until October 11 at 8:00AM EDT by NWS Gray ME",
+        "description": "* WHAT...Sub-freezing temperatures as low as 30 expected.\n\n* WHERE...Central Interior Cumberland and Androscoggin Counties.\n\n* WHEN...From 2 AM to 8 AM EDT Sunday.\n\n* IMPACTS...Sensitive outdoor plants may be killed if left uncovered.",
+        "instruction": "Take steps now to protect tender plants from the cold.",
+        "response": "Execute",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "NPWGYX"
+          ],
+          "WMOidentifier": [
+            "WWUS71 KGYX 101837"
+          ],
+          "NWSheadline": [
+            "FREEZE WARNING REMAINS IN EFFECT FROM 2 AM TO 8 AM EDT SUNDAY"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM",
+            "CMAS"
+          ],
+          "VTEC": [
+            "/O.CON.KGYX.FZ.W.0005.261011T0600Z-261011T1200Z/"
+          ],
+          "eventEndingTime": [
+            "2026-10-11T08:00:00-04:00"
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "NWS"
+          ],
+          "NationalWeatherService": [
+            "FZW"
+          ]
+        }
+      }
+    }
+  ],
+  "title": "Current watches, warnings, and advisories",
+  "updated": "2026-10-11T01:26:58+00:00"
+}

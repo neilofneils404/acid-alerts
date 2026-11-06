@@ -1,13 +1,14 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 
 // Pixel diamond with a geometric A. Idle brand for the bar and empty panel.
 // Colors come from the active Omarchy theme: outline in `ink`, letter in `pip`.
 Item {
   id: root
 
-  property color ink: Color.foreground
-  property color pip: Color.accent
+  property color ink: Commons.Color.foreground
+  property color pip: Commons.Color.accent
   property int cell: 0
 
   // 1 = diamond, 2 = A. The A is a two-pixel peak and a full crossbar so it

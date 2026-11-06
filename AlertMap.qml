@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import "Model.js" as Model
 
 // Pixel footprint of NWS alert polygons. No basemap, no radar, no tiles:
@@ -13,10 +14,10 @@ Item {
   property var focusRings: []
   property real userLat: NaN
   property real userLon: NaN
-  property color ink: Color.foreground
-  property color paper: Color.background
-  property color mark: Color.accent
-  property color warning: Color.urgent
+  property color ink: Commons.Color.foreground
+  property color paper: Commons.Color.background
+  property color mark: Commons.Color.accent
+  property color warning: Commons.Color.urgent
   property int cell: 3
   property int mapHeight: Style.space(128)
 

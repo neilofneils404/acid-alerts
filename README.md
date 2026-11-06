@@ -81,7 +81,7 @@ Change alert filters in the panel, or edit the Acid Alerts widget entry in `~/.c
 | `showWatches` | `false` | Include watches. |
 | `showAdvisories` | `false` | Include advisories and other lower-tier products. |
 | `families` | `[]` | Include all weather families, or limit to the selected families below. |
-| `refreshSeconds` | `60` | Seconds between checks; minimum `30`, maximum `86400`. |
+| `refreshSeconds` | `60` | Seconds between checks; minimum `30`, maximum `3600` in the settings UI (`86400` for manual configuration). |
 | `latitude` / `longitude` / `name` | Omarchy weather location | Override the plugin location without changing your weather settings. Both coordinates are needed; a blank or missing one leaves the weather location in use. |
 | `hideWhenClear` | `false` | Hide the bar mark after a successful check with nothing to show. Unavailable data, hidden alerts, and demo mode stay visible. |
 | `demo` | `false` | Show sample alerts instead of live data. The bar labels these `DEMO`. |
@@ -140,3 +140,11 @@ node tests/test-response-limits.js
 Brand assets, editable SVG sources, and rendering instructions are documented in [branding/README.md](branding/README.md).
 
 [MIT licensed](LICENSE). Live alert text and geographic data are supplied by the [NWS API](https://www.weather.gov/documentation/services-web-api).
+
+### Omarchy 4.5 runtime check
+
+Version 1.3.1 fixes ambiguous theme color references with Qt 6.12. On an
+Omarchy development desktop, run `python scripts/smoke-qml.py` to load the
+real widget and demo panel in a hidden, isolated Quickshell instance. It fails
+on undefined colors and other runtime binding errors; no live alerts are fetched.
+Tested on Omarchy 4.5.0-3 / Qt 6.12.0.

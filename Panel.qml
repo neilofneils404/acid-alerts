@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -16,9 +17,9 @@ Panel {
   property bool filtersOpen: false
 
   readonly property var barIdentity: hostWidget || root
-  readonly property color contentForeground: bar ? bar.foreground : Color.foreground
-  readonly property color contentUrgent: bar ? bar.urgent : Color.urgent
-  readonly property color contentAccent: Color.accent
+  readonly property color contentForeground: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color contentUrgent: bar ? bar.urgent : Commons.Color.urgent
+  readonly property color contentAccent: Commons.Color.accent
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color dim: Qt.darker(contentForeground, 1.55)
   readonly property int alertCount: service ? service.alertCount : 0
@@ -224,7 +225,7 @@ Panel {
             userLat: Number(root.service.location.latitude)
             userLon: Number(root.service.location.longitude)
             ink: root.contentForeground
-            paper: Color.popups.background
+            paper: Commons.Color.popups.background
             mark: root.contentAccent
             warning: root.contentUrgent
           }
@@ -255,7 +256,7 @@ Panel {
               width: content.width
               height: rowText.implicitHeight + Style.space(10)
               color: index === root.service.selectedIndex
-                ? Style.selectedFillFor(root.contentForeground, Color.accent)
+                ? Style.selectedFillFor(root.contentForeground, Commons.Color.accent)
                 : "transparent"
               border.width: 0
               radius: 0
@@ -457,7 +458,7 @@ Panel {
                   implicitWidth: familyLabel.implicitWidth + Style.space(12)
                   implicitHeight: familyLabel.implicitHeight + Style.space(8)
                   color: on
-                    ? Style.selectedFillFor(root.contentForeground, Color.accent)
+                    ? Style.selectedFillFor(root.contentForeground, Commons.Color.accent)
                     : "transparent"
                   border.width: 1
                   border.color: on ? root.contentAccent : Qt.rgba(root.dim.r, root.dim.g, root.dim.b, 0.45)

@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -153,8 +154,8 @@ BarWidget {
   Component {
     id: brandComp
     BrandMark {
-      ink: Color.foreground
-      pip: Color.accent
+      ink: Commons.Color.foreground
+      pip: Commons.Color.accent
     }
   }
 
